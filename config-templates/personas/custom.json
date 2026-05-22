@@ -1,0 +1,13 @@
+{
+  "id": "org:example/agent:custom-v1",
+  "version": "0.1.0",
+  "capabilities": [
+    {
+      "id": "example_behavior",
+      "description": "Can perform a user-defined class of behavior through externally configured MCP tools."
+    }
+  ],
+  "extensions": {
+    "org.agentsware.opengeneral.description": "Example user-installed OpenGeneral persona."
+  }
+}

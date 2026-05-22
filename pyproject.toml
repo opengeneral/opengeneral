@@ -1,0 +1,26 @@
+[project]
+name = "opengeneral"
+version = "0.1.0"
+description = "A general-purpose agent runtime, initially demonstrated with a coding persona."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "jsonschema>=4.22.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "pytest-asyncio>=0.23.0"
+]
+
+[project.scripts]
+opengeneral = "opengeneral.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["src"]

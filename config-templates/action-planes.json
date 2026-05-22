@@ -1,0 +1,10 @@
+{
+  "action_planes": {
+    "local": {
+      "endpoint": "http://127.0.0.1:4767/mcp"
+    },
+    "prod": {
+      "endpoint": "https://action-plane.company.com/mcp"
+    }
+  }
+}

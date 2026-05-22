@@ -1,0 +1,10 @@
+{
+  "agents": {
+    "coder": {
+      "id": "coder-a1b2c3d4e5f6",
+      "persona": "coder",
+      "action_plane": "local",
+      "token_ref": "env:OPENGENERAL_CODER_TOKEN"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "org:agentsware/persona:opengeneral-coder-v1",
+  "version": "0.1.0",
+  "capabilities": [
+    {
+      "id": "files_editing",
+      "description": "Can inspect and modify files in the active workspace."
+    },
+    {
+      "id": "command_execution",
+      "description": "Can run local commands needed for builds, tests, and development tasks."
+    },
+    {
+      "id": "version_control",
+      "description": "Can inspect repository state and create local commits."
+    },
+    {
+      "id": "browser_assistance",
+      "description": "Can open and inspect local or external web pages for development workflows."
+    }
+  ],
+  "extensions": {
+    "org.agentsware.opengeneral.persona": "coder",
+    "org.agentsware.opengeneral.description": "Reference persona for a software coding agent."
+  }
+}
