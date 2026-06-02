@@ -36,7 +36,7 @@ def agent() -> GeneralPurposeAgent:
 
 
 async def test_agent_lists_tools_through_runtime() -> None:
-    response = await agent().respond("tools")
+    response = await agent().respond("/tools")
 
     assert response == "local-test: echo"
 
@@ -50,7 +50,4 @@ async def test_agent_uses_mcp_for_requested_tool_call() -> None:
 async def test_agent_keeps_general_reasoning_internal() -> None:
     response = await agent().respond("plan a refactor")
 
-    assert response == (
-        "I can reason about that goal, but environment actions must be requested "
-        "through MCP: plan a refactor"
-    )
+    assert response == "I'm ready to work on that: plan a refactor"

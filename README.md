@@ -95,11 +95,10 @@ coder-a1b2c3d4e5f6
 
 The generated ID is also the Action Plane identity. The Action Plane remains responsible for authentication, policy, tool filtering, argument restrictions, and audit.
 
-### 4. Inspect agents
+### 4. Talk to the agent
 
 ```bash
-opengeneral agents list
-opengeneral agents show coder
+opengeneral talk coder
 ```
 
 ### 5. Run tests

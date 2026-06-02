@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
+import sys
 from uuid import uuid4
 
 from opengeneral.config import (
@@ -12,7 +14,9 @@ from opengeneral.config import (
     AgentConfig,
     AgentsConfig,
 )
+from opengeneral.action_plane import EmptyActionPlaneConnector
 from opengeneral.personas import PersonaNotFoundError, PersonaRegistry
+from opengeneral.runner import build_agent_runner
 
 def create_agent_id(persona_tag: str) -> str:
     return f"{persona_tag}-{uuid4().hex[:12]}"
@@ -180,6 +184,9 @@ def main() -> None:
     agents_remove = agents_subparsers.add_parser("remove", help="Remove a spawned agent.")
     agents_remove.add_argument("name")
 
+    talk = subparsers.add_parser("talk", help="Open a chat with a spawned agent.")
+    talk.add_argument("name")
+
     spawn = subparsers.add_parser("spawn", help="Spawn an agent from a persona.")
     spawn.add_argument("--persona", required=True)
     spawn.add_argument("--name")
@@ -218,6 +225,11 @@ def main() -> None:
             print(remove_agent(args.name))
             return
 
+        if args.command == "talk":
+            runner = asyncio.run(build_agent_runner(args.name, EmptyActionPlaneConnector()))
+            asyncio.run(runner.chat(sys.stdin, sys.stdout))
+            return
+
         if args.command == "spawn":
             print(start_agent(args.persona, args.action_plane, args.name))
             return
@@ -225,6 +237,8 @@ def main() -> None:
         parser.print_help()
     except PersonaNotFoundError as error:
         print(f"Persona not found: {error.tag}")
+    except ValueError as error:
+        print(error)
 
 
 if __name__ == "__main__":

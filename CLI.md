@@ -23,6 +23,7 @@ opengeneral personas show coder
 opengeneral action-planes add default --endpoint http://127.0.0.1:4767/mcp
 opengeneral spawn --persona coder --name coder
 opengeneral agents list
+opengeneral talk coder
 ```
 
 The standard OpenGeneral home is:
@@ -117,12 +118,33 @@ Current limitation:
 - Creates and records the agent.
 - Does not yet create a live Action Plane MCP client or interactive agent loop.
 
+### `opengeneral talk <name>`
+
+Open a chat with a spawned agent.
+
+```bash
+opengeneral talk coder
+```
+
+Expected terminal behavior:
+
+```text
+Talking to coder. Type /exit to leave.
+
+coder> hello
+<agent response>
+
+coder> /exit
+```
+
+
 ### `opengeneral agents list`
 
 List spawned agents.
 
 ```bash
 opengeneral agents list
+opengeneral talk coder
 ```
 
 Expected output:

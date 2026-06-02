@@ -17,8 +17,10 @@ class GeneralPurposeAgent:
 
     async def respond(self, message: str) -> str:
         request = message.strip()
-        if request == "tools":
+        if request == "/tools":
             tools = await self.runtime.list_available_tools()
+            if not tools:
+                return "No MCP tools are currently available."
             return "\n".join(
                 f"{server_id}: {', '.join(names) if names else '(none)'}"
                 for server_id, names in sorted(tools.items())
@@ -39,8 +41,8 @@ class GeneralPurposeAgent:
 
     def _reason(self, message: str) -> str:
         if not message:
-            return "Give me a goal, or type 'tools' to inspect MCP capabilities."
-        return f"I can reason about that goal, but environment actions must be requested through MCP: {message}"
+            return "Give me a goal, or type '/tools' to inspect available tools."
+        return f"I'm ready to work on that: {message}"
 
     def _render_tool_result(self, result: MCPToolResult) -> str:
         if result.is_error:
