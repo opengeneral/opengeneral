@@ -12,7 +12,7 @@ DEFAULT_ACTION_PLANES_CONFIG_PATH = Path(
 DEFAULT_AGENTS_CONFIG_PATH = Path(
     os.environ.get("OPENGENERAL_AGENTS_CONFIG", OPENGENERAL_HOME / "agents.json")
 ).expanduser()
-DEFAULT_ACTION_PLANE = "local"
+DEFAULT_ACTION_PLANE = "default"
 
 
 @dataclass(frozen=True)
@@ -68,7 +68,6 @@ class AgentConfig:
     agent_id: str
     persona_tag: str
     action_plane: str
-    token_ref: str | None = None
 
 
 @dataclass(frozen=True)
@@ -95,7 +94,6 @@ class AgentsConfig:
                 agent_id=value["id"],
                 persona_tag=value["persona"],
                 action_plane=value["action_plane"],
-                token_ref=value.get("token_ref"),
             )
         return cls(agents=agents)
 
@@ -115,7 +113,6 @@ class AgentsConfig:
                     "id": agent.agent_id,
                     "persona": agent.persona_tag,
                     "action_plane": agent.action_plane,
-                    **({"token_ref": agent.token_ref} if agent.token_ref is not None else {}),
                 }
                 for name, agent in self.agents.items()
             }

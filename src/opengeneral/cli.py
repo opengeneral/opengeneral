@@ -31,7 +31,6 @@ def start_agent(
     persona_tag: str,
     action_plane: str,
     agent_name: str | None,
-    token_ref: str | None,
 ) -> str:
     persona = PersonaRegistry().load(persona_tag)
     action_planes_config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
@@ -50,7 +49,6 @@ def start_agent(
         agent_id=agent_id,
         persona_tag=persona.tag,
         action_plane=action_plane,
-        token_ref=token_ref,
     )
     AgentsConfig(agents=agents).write(DEFAULT_AGENTS_CONFIG_PATH)
     return f"Spawned agent {name} ({agent_id}) from persona {persona.tag} via action plane {action_plane}"
@@ -79,8 +77,6 @@ def show_agent(name: str) -> str:
         f"Action Plane identity: {agent.agent_id}",
         f"Action plane: {agent.action_plane}",
     ]
-    if agent.token_ref is not None:
-        lines.append(f"Token: {agent.token_ref}")
     return "\n".join(lines)
 
 
@@ -188,8 +184,6 @@ def main() -> None:
     spawn.add_argument("--persona", required=True)
     spawn.add_argument("--name")
     spawn.add_argument("--action-plane", default=DEFAULT_ACTION_PLANE)
-    spawn.add_argument("--token-ref")
-    spawn.add_argument("--token-env")
 
     args = parser.parse_args()
 
@@ -225,10 +219,7 @@ def main() -> None:
             return
 
         if args.command == "spawn":
-            token_ref = args.token_ref
-            if args.token_env is not None:
-                token_ref = f"env:{args.token_env}"
-            print(start_agent(args.persona, args.action_plane, args.name, token_ref))
+            print(start_agent(args.persona, args.action_plane, args.name))
             return
 
         parser.print_help()

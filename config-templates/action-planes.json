@@ -1,6 +1,6 @@
 {
   "action_planes": {
-    "local": {
+    "default": {
       "endpoint": "http://127.0.0.1:4767/mcp"
     },
     "prod": {

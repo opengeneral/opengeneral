@@ -33,9 +33,9 @@ OpenGeneral's pitch is **generality first**: one harness, many cognitive persona
 
 An Action Plane is the external boundary where an agent's environment-changing work happens. OpenGeneral owns the cognitive side: loading personas, spawning agents, and running the agent loop. The Action Plane owns the tool side: exposing MCP tools, authenticating agent identities, enforcing permissions, filtering tool access, and auditing actions.
 
-By default, OpenGeneral is designed to set up and connect to MCP Harbour as the local Action Plane. That default should make the first-run experience simple, but it is not a lock-in point. Users can independently set up and configure their own Action Plane locally, on another machine, or as a shared remote service, then point OpenGeneral at its MCP endpoint.
+By default, OpenGeneral is designed to set up and connect to MCP Harbour as the default Action Plane. That default should make the first-run experience simple, but it is not a lock-in point. Users can independently set up and configure their own Action Plane locally, on another machine, or as a shared remote service, then point OpenGeneral at its MCP endpoint.
 
-This keeps OpenGeneral composable. The same `coder` persona can run against a local Action Plane for personal projects or a remote Action Plane for a team environment, without changing the persona or embedding tools into the runtime.
+This keeps OpenGeneral composable. The same `coder` persona can run against a default Action Plane for personal projects or a remote Action Plane for a team environment, without changing the persona or embedding tools into the runtime.
 
 ```text
 persona -> spawned agent -> Action Plane -> MCP tools
@@ -67,10 +67,10 @@ OpenGeneral stores user configuration and user-installed personas under:
 ~/.opengeneral/personas/*.json
 ```
 
-Configure a local Action Plane endpoint:
+Configure a default Action Plane endpoint:
 
 ```bash
-opengeneral action-planes add local \
+opengeneral action-planes add default \
   --endpoint http://127.0.0.1:4767/mcp
 ```
 
@@ -93,7 +93,7 @@ This creates an agent named `coder` with a generated ID prefixed with the person
 coder-a1b2c3d4e5f6
 ```
 
-The generated ID is also the Action Plane identity. The Action Plane remains responsible for resolving the Bearer token, applying policy, filtering tools, enforcing argument restrictions, and auditing actions.
+The generated ID is also the Action Plane identity. The Action Plane remains responsible for authentication, policy, tool filtering, argument restrictions, and audit.
 
 ### 4. Inspect agents
 
