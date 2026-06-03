@@ -21,6 +21,7 @@ Primary flow:
 opengeneral personas list
 opengeneral personas show coder
 opengeneral action-planes add default --endpoint http://127.0.0.1:4767/mcp
+opengeneral daemon start
 opengeneral spawn --persona coder --name coder
 opengeneral agents list
 opengeneral talk coder
@@ -40,7 +41,7 @@ It stores Action Plane configuration, spawned agent records, and user-installed 
 ~/.opengeneral/personas/*.json
 ```
 
-OpenGeneral spawns agents from personas. Each agent has a user-facing name plus a generated persona-prefixed ID. The generated ID is the Action Plane identity. The Action Plane owns MCP servers, policies, permissions, tool filtering, argument restrictions, and audit.
+OpenGeneral spawns agents from personas. A single local supervisor daemon manages all running agents. Each agent has a user-facing name plus a generated persona-prefixed ID. The generated ID is the Action Plane identity. The Action Plane owns MCP servers, policies, permissions, tool filtering, argument restrictions, and audit.
 
 ## Implemented commands
 
@@ -93,9 +94,33 @@ Remove one configured Action Plane.
 opengeneral action-planes remove default
 ```
 
+### `opengeneral daemon start`
+
+Start the local supervisor daemon.
+
+```bash
+opengeneral daemon start
+```
+
+### `opengeneral daemon status`
+
+Show daemon status.
+
+```bash
+opengeneral daemon status
+```
+
+### `opengeneral daemon stop`
+
+Stop the local supervisor daemon.
+
+```bash
+opengeneral daemon stop
+```
+
 ### `opengeneral spawn [--persona <persona>] [--name <agent-name>] [--action-plane <name>]`
 
-Spawn an agent from a persona.
+Spawn a daemon-managed agent from a persona.
 
 ```bash
 opengeneral spawn --persona coder --name coder
@@ -109,14 +134,15 @@ Required behavior:
 - Use `--name` as the readable agent name, or default to the persona tag when unused.
 - Generate a persona-prefixed agent ID.
 - Use that generated agent ID as the Action Plane identity.
+- Ask the local daemon to spawn and manage the running agent.
 - Store the agent in `~/.opengeneral/agents.json`.
 - Create a Streamable HTTP MCP client to the Action Plane.
 - Route all Environment-Modifying Operations through the Action Plane.
 
 Current limitation:
 
-- Creates and records the agent.
-- Does not yet create a live Action Plane MCP client or interactive agent loop.
+- Creates and manages the agent in the local daemon.
+- Uses an empty Action Plane connector until real Action Plane MCP client transport is implemented.
 
 ### `opengeneral talk <name>`
 
@@ -144,7 +170,6 @@ List spawned agents.
 
 ```bash
 opengeneral agents list
-opengeneral talk coder
 ```
 
 Expected output:

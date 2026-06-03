@@ -1,31 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TextIO
-
-from opengeneral.action_plane import ActionPlaneConnector
-from opengeneral.agent import GeneralPurposeAgent
-from opengeneral.config import (
-    DEFAULT_ACTION_PLANES_CONFIG_PATH,
-    DEFAULT_AGENTS_CONFIG_PATH,
-    ActionPlanesConfig,
-    AgentsConfig,
-)
-from opengeneral.personas import PersonaRegistry
-from opengeneral.runtime import AgentRuntime
+from typing import Protocol, TextIO
 
 _EXIT_COMMANDS = {"/exit", "/quit"}
+
+
+class ChatResponder(Protocol):
+    def send_message(self, name: str, content: str) -> dict[str, list[str]]: ...
 
 
 @dataclass(frozen=True)
 class AgentChatRunner:
     agent_name: str
-    agent: GeneralPurposeAgent
+    responder: ChatResponder
 
-    async def respond(self, message: str) -> str:
-        return await self.agent.respond(message)
-
-    async def chat(self, input_stream: TextIO, output_stream: TextIO) -> None:
+    def chat(self, input_stream: TextIO, output_stream: TextIO) -> None:
         output_stream.write(f"Talking to {self.agent_name}. Type /exit to leave.\n\n")
         output_stream.flush()
         while True:
@@ -39,31 +29,9 @@ class AgentChatRunner:
             request = message.strip()
             if request in _EXIT_COMMANDS:
                 return
-            output_stream.write(await self.respond(request))
-            output_stream.write("\n\n")
+            result = self.responder.send_message(self.agent_name, request)
+            for response in result.get("messages", []):
+                output_stream.write(response)
+                output_stream.write("\n")
+            output_stream.write("\n")
             output_stream.flush()
-
-
-async def build_agent_runner(
-    agent_name: str,
-    connector: ActionPlaneConnector,
-) -> AgentChatRunner:
-    agents_config = AgentsConfig.from_path(DEFAULT_AGENTS_CONFIG_PATH)
-    agent_config = agents_config.agents.get(agent_name)
-    if agent_config is None:
-        raise ValueError(f"Agent not found: {agent_name}")
-
-    action_planes_config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
-    action_plane = action_planes_config.action_planes.get(agent_config.action_plane)
-    if action_plane is None:
-        raise ValueError(f"Action plane not found: {agent_config.action_plane}")
-
-    persona = PersonaRegistry().load(agent_config.persona_tag)
-    clients = await connector.connect(action_plane.endpoint, agent_config.agent_id)
-    runtime = AgentRuntime(
-        manifest=persona.manifest,
-        clients=clients,
-        action_plane=action_plane.name,
-        identity=agent_config.agent_id,
-    )
-    return AgentChatRunner(agent_config.name, GeneralPurposeAgent(runtime))

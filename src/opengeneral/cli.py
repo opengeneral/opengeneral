@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
+import subprocess
 import sys
 from uuid import uuid4
 
@@ -14,9 +14,10 @@ from opengeneral.config import (
     AgentConfig,
     AgentsConfig,
 )
-from opengeneral.action_plane import EmptyActionPlaneConnector
+from opengeneral.daemon_client import DAEMON_NOT_RUNNING, DaemonClient, DaemonUnavailableError
 from opengeneral.personas import PersonaNotFoundError, PersonaRegistry
-from opengeneral.runner import build_agent_runner
+from opengeneral.runner import AgentChatRunner
+
 
 def create_agent_id(persona_tag: str) -> str:
     return f"{persona_tag}-{uuid4().hex[:12]}"
@@ -31,67 +32,52 @@ def default_agent_name(persona_tag: str, agents: dict[str, AgentConfig]) -> str:
     return f"{persona_tag}-{index}"
 
 
-def start_agent(
-    persona_tag: str,
-    action_plane: str,
-    agent_name: str | None,
-) -> str:
+def start_agent(persona_tag: str, action_plane: str, agent_name: str | None) -> str:
     persona = PersonaRegistry().load(persona_tag)
     action_planes_config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
     if action_plane not in action_planes_config.action_planes:
         return f"Action plane not found: {action_plane}"
 
     agents_config = AgentsConfig.from_path(DEFAULT_AGENTS_CONFIG_PATH)
-    agents = dict(agents_config.agents)
-    name = agent_name or default_agent_name(persona.tag, agents)
-    if name in agents:
+    name = agent_name or default_agent_name(persona.tag, agents_config.agents)
+    if name in agents_config.agents:
         return f"Agent already exists: {name}"
 
-    agent_id = create_agent_id(persona.tag)
-    agents[name] = AgentConfig(
-        name=name,
-        agent_id=agent_id,
-        persona_tag=persona.tag,
-        action_plane=action_plane,
+    result = DaemonClient().spawn_agent(name, persona.tag, action_plane, create_agent_id(persona.tag))
+    return (
+        f"Spawned agent {result['name']} ({result['id']}) from persona "
+        f"{result['persona']} via action plane {result['action_plane']}"
     )
-    AgentsConfig(agents=agents).write(DEFAULT_AGENTS_CONFIG_PATH)
-    return f"Spawned agent {name} ({agent_id}) from persona {persona.tag} via action plane {action_plane}"
-
 
 
 def render_agents() -> str:
-    config = AgentsConfig.from_path(DEFAULT_AGENTS_CONFIG_PATH)
-    lines = [f"Agents config: {DEFAULT_AGENTS_CONFIG_PATH}", "", "Agents:"]
-    if not config.agents:
+    agents = DaemonClient().list_agents()
+    lines = ["Agents:"]
+    if not agents:
         lines.append("  (none)")
-    for agent in config.agents.values():
-        lines.append(f"  {agent.name}  {agent.agent_id}  {agent.persona_tag}  {agent.action_plane}")
+    for agent in agents:
+        lines.append(f"  {agent['name']}  {agent['id']}  {agent['persona']}  {agent['action_plane']}")
     return "\n".join(lines)
 
 
 def show_agent(name: str) -> str:
-    config = AgentsConfig.from_path(DEFAULT_AGENTS_CONFIG_PATH)
-    agent = config.agents.get(name)
-    if agent is None:
-        return f"Agent not found: {name}"
+    agent = DaemonClient().show_agent(name)
     lines = [
-        f"Agent: {agent.name}",
-        f"ID: {agent.agent_id}",
-        f"Persona: {agent.persona_tag}",
-        f"Action Plane identity: {agent.agent_id}",
-        f"Action plane: {agent.action_plane}",
+        f"Agent: {agent['name']}",
+        f"ID: {agent['id']}",
+        f"Persona: {agent['persona']}",
+        f"Action Plane identity: {agent['id']}",
+        f"Action plane: {agent['action_plane']}",
+        f"Status: {agent['status']}",
     ]
+    if agent.get("last_error") is not None:
+        lines.append(f"Last error: {agent['last_error']}")
     return "\n".join(lines)
 
 
 def remove_agent(name: str) -> str:
-    config = AgentsConfig.from_path(DEFAULT_AGENTS_CONFIG_PATH)
-    if name not in config.agents:
-        return f"Agent not found: {name}"
-    agents = dict(config.agents)
-    agent = agents.pop(name)
-    AgentsConfig(agents=agents).write(DEFAULT_AGENTS_CONFIG_PATH)
-    return f"Removed agent {agent.name} ({agent.agent_id}) from {DEFAULT_AGENTS_CONFIG_PATH}"
+    result = DaemonClient().remove_agent(name)
+    return f"Removed agent {result['name']} ({result['id']})"
 
 
 def render_personas() -> str:
@@ -153,6 +139,30 @@ def remove_action_plane(name: str) -> str:
     return f"Removed action plane {name} from {DEFAULT_ACTION_PLANES_CONFIG_PATH}"
 
 
+def render_daemon_status() -> str:
+    result = DaemonClient().status()
+    return f"OpenGeneral daemon {result['status']} ({result['agents']} agents)"
+
+
+def start_daemon() -> str:
+    try:
+        DaemonClient().status()
+    except DaemonUnavailableError:
+        subprocess.Popen(
+            [sys.executable, "-m", "opengeneral.daemon"],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return "Started OpenGeneral daemon"
+    return "OpenGeneral daemon already running"
+
+
+def stop_daemon() -> str:
+    DaemonClient().stop()
+    return "Stopped OpenGeneral daemon"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the OpenGeneral reference agent.")
     subparsers = parser.add_subparsers(dest="command")
@@ -183,6 +193,12 @@ def main() -> None:
     agents_show.add_argument("name")
     agents_remove = agents_subparsers.add_parser("remove", help="Remove a spawned agent.")
     agents_remove.add_argument("name")
+
+    daemon = subparsers.add_parser("daemon", help="Manage the OpenGeneral daemon.")
+    daemon_subparsers = daemon.add_subparsers(dest="daemon_command", required=True)
+    daemon_subparsers.add_parser("start", help="Start the daemon.")
+    daemon_subparsers.add_parser("status", help="Show daemon status.")
+    daemon_subparsers.add_parser("stop", help="Stop the daemon.")
 
     talk = subparsers.add_parser("talk", help="Open a chat with a spawned agent.")
     talk.add_argument("name")
@@ -225,9 +241,18 @@ def main() -> None:
             print(remove_agent(args.name))
             return
 
+        if args.command == "daemon":
+            if args.daemon_command == "start":
+                print(start_daemon())
+                return
+            if args.daemon_command == "status":
+                print(render_daemon_status())
+                return
+            print(stop_daemon())
+            return
+
         if args.command == "talk":
-            runner = asyncio.run(build_agent_runner(args.name, EmptyActionPlaneConnector()))
-            asyncio.run(runner.chat(sys.stdin, sys.stdout))
+            AgentChatRunner(args.name, DaemonClient()).chat(sys.stdin, sys.stdout)
             return
 
         if args.command == "spawn":
@@ -235,9 +260,13 @@ def main() -> None:
             return
 
         parser.print_help()
+    except DaemonUnavailableError:
+        print(DAEMON_NOT_RUNNING)
     except PersonaNotFoundError as error:
         print(f"Persona not found: {error.tag}")
     except ValueError as error:
+        print(error)
+    except RuntimeError as error:
         print(error)
 
 

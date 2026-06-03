@@ -81,13 +81,22 @@ opengeneral action-planes add prod \
   --endpoint https://action-plane.company.com/mcp
 ```
 
-### 3. Spawn an agent from a persona
+### 3. Start the daemon
+
+```bash
+opengeneral daemon start
+opengeneral daemon status
+```
+
+OpenGeneral uses one local supervisor daemon to manage all running agents.
+
+### 4. Spawn an agent from a persona
 
 ```bash
 opengeneral spawn --persona coder --name coder
 ```
 
-This creates an agent named `coder` with a generated ID prefixed with the persona name, such as:
+This creates a running daemon-managed agent named `coder` with a generated ID prefixed with the persona name, such as:
 
 ```text
 coder-a1b2c3d4e5f6
@@ -95,13 +104,13 @@ coder-a1b2c3d4e5f6
 
 The generated ID is also the Action Plane identity. The Action Plane remains responsible for authentication, policy, tool filtering, argument restrictions, and audit.
 
-### 4. Talk to the agent
+### 5. Talk to the agent
 
 ```bash
 opengeneral talk coder
 ```
 
-### 5. Run tests
+### 6. Run tests
 
 ```bash
 pytest
