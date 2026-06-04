@@ -18,7 +18,9 @@ class AgentPersona:
 
     @property
     def description(self) -> str:
-        value = self.manifest.extensions.get("org.agentsware.opengeneral.description")
+        if self.manifest.description:
+            return self.manifest.description
+        value = self.manifest.extensions.get("opengeneral.description")
         return str(value) if value else "agent persona"
 
 

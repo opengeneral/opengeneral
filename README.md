@@ -43,7 +43,9 @@ persona -> spawned agent -> Action Plane -> MCP tools
 
 ## Personas and agents
 
-A persona is a manifest plus the agent instructions needed for a domain. An agent is a spawned entity created from a persona. The agent has a readable user-facing name and a generated ID used as its Action Plane identity.
+A persona is a manifest plus the construction material needed for a domain: declared capabilities and extension-provided construction material such as Agent Skills-style skill references. An agent is a spawned entity created from a persona. The agent has a readable user-facing name and a generated ID used as its Action Plane identity.
+
+Skills are cognitive instruction packages loaded from `SKILL.md` files. They shape how an agent works, but they are not environment tools and do not grant access. Environment access still belongs to the Action Plane.
 
 The same OpenGeneral harness should be able to spawn agents from any persona against any configured Action Plane.
 

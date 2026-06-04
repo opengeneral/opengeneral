@@ -23,15 +23,6 @@ def create_agent_id(persona_tag: str) -> str:
     return f"{persona_tag}-{uuid4().hex[:12]}"
 
 
-def default_agent_name(persona_tag: str, agents: dict[str, AgentConfig]) -> str:
-    if persona_tag not in agents:
-        return persona_tag
-    index = 2
-    while f"{persona_tag}-{index}" in agents:
-        index += 1
-    return f"{persona_tag}-{index}"
-
-
 def start_agent(persona_tag: str, action_plane: str, agent_name: str | None) -> str:
     persona = PersonaRegistry().load(persona_tag)
     action_planes_config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
@@ -39,7 +30,9 @@ def start_agent(persona_tag: str, action_plane: str, agent_name: str | None) -> 
         return f"Action plane not found: {action_plane}"
 
     agents_config = AgentsConfig.from_path(DEFAULT_AGENTS_CONFIG_PATH)
-    name = agent_name or default_agent_name(persona.tag, agents_config.agents)
+    if agent_name is None:
+        return f"Agent name is required. Use: opengeneral spawn --persona {persona.tag} --name <name>"
+    name = agent_name
     if name in agents_config.agents:
         return f"Agent already exists: {name}"
 
@@ -205,7 +198,7 @@ def main() -> None:
 
     spawn = subparsers.add_parser("spawn", help="Spawn an agent from a persona.")
     spawn.add_argument("--persona", required=True)
-    spawn.add_argument("--name")
+    spawn.add_argument("--name", required=True)
     spawn.add_argument("--action-plane", default=DEFAULT_ACTION_PLANE)
 
     args = parser.parse_args()

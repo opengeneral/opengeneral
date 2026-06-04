@@ -7,6 +7,9 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+_SKILLS_EXTENSION = "opengeneral.skills"
+_DESCRIPTION_EXTENSION = "opengeneral.description"
+
 _MANIFEST_SCHEMA: dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -29,7 +32,7 @@ _MANIFEST_SCHEMA: dict[str, Any] = {
                 "description": {"type": "string"},
             },
             "additionalProperties": False,
-        }
+        },
     },
     "additionalProperties": False,
 }
@@ -54,6 +57,18 @@ class AgentCapabilityManifest:
     version: str | None
     capabilities: tuple[AgentCapability, ...]
     extensions: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def description(self) -> str | None:
+        value = self.extensions.get(_DESCRIPTION_EXTENSION)
+        return str(value) if value else None
+
+    @property
+    def skills(self) -> tuple[str, ...]:
+        value = self.extensions.get(_SKILLS_EXTENSION, [])
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ValueError(f"{_SKILLS_EXTENSION} must be a list of skill names")
+        return tuple(value)
 
     @classmethod
     def from_mapping(cls, value: dict[str, Any]) -> AgentCapabilityManifest:

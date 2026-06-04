@@ -8,6 +8,7 @@ from typing import Any
 
 from opengeneral.action_plane import ActionPlaneConnector, EmptyActionPlaneConnector
 from opengeneral.agent import GeneralPurposeAgent
+from opengeneral.agent_factory import create_agent
 from opengeneral.config import (
     DEFAULT_ACTION_PLANES_CONFIG_PATH,
     DEFAULT_AGENTS_CONFIG_PATH,
@@ -65,13 +66,14 @@ class AgentManager:
             clients=clients,
             action_plane=action_plane.name,
             identity=config.agent_id,
+            agent_name=config.name,
         )
         running = RunningAgent(
             config=config,
             action_plane=action_plane,
             persona=persona,
             runtime=runtime,
-            agent=GeneralPurposeAgent(runtime),
+            agent=create_agent(persona, runtime),
         )
         self.agents[config.name] = running
         return running

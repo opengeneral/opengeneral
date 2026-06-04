@@ -218,6 +218,29 @@ opengeneral setup coder
 opengeneral setup coder --endpoint https://action-plane.company.com/mcp
 ```
 
+## Persona construction format
+
+Personas construct agents with declared capabilities and Agent Skills-style skill references.
+
+```json
+{
+  "id": "opengeneral/persona:opengeneral-coder-v1",
+  "capabilities": [],
+  "extensions": {
+    "opengeneral.skills": ["debugging", "implementation"]
+  }
+}
+```
+
+Skills are loaded from Agent Skills-style directories:
+
+```text
+skills/<skill-name>/SKILL.md
+~/.opengeneral/skills/<skill-name>/SKILL.md
+```
+
+Each `SKILL.md` has YAML-like frontmatter with `name` and `description`, followed by markdown instructions.
+
 ## Action Plane configuration format
 
 Standard Action Plane config path:

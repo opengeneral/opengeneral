@@ -8,16 +8,18 @@ from opengeneral.personas import PersonaNotFoundError, PersonaRegistry
 
 
 def test_persona_registry_loads_persona_by_tag(tmp_path: Path) -> None:
-    persona_path = tmp_path / "coding.json"
+    persona_path = tmp_path / "coder.json"
     persona_path.write_text(
-        '{"id":"org:test/agent:coding-v1","capabilities":[]}',
+        '{"id":"org:test/persona:coder-v1","capabilities":[],"extensions":{"opengeneral.description":"Coder persona.","opengeneral.skills":["debugging"]}}',
         encoding="utf-8",
     )
 
-    persona = PersonaRegistry([tmp_path]).load("coding")
+    persona = PersonaRegistry([tmp_path]).load("coder")
 
-    assert persona.tag == "coding"
-    assert persona.manifest.agent_id == "org:test/agent:coding-v1"
+    assert persona.tag == "coder"
+    assert persona.manifest.agent_id == "org:test/persona:coder-v1"
+    assert persona.description == "Coder persona."
+    assert persona.manifest.skills == ("debugging",)
 
 
 def test_persona_registry_rejects_unknown_tag(tmp_path: Path) -> None:

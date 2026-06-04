@@ -13,6 +13,7 @@ class AgentRuntime:
     clients: Mapping[str, MCPClient]
     action_plane: str | None = None
     identity: str | None = None
+    agent_name: str | None = None
 
     async def list_available_tools(self) -> dict[str, list[str]]:
         return {

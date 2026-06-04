@@ -1,8 +1,9 @@
 {
-  "id": "org:agentsware/agent:opengeneral-minimal-v1",
+  "id": "opengeneral/persona:opengeneral-minimal-v1",
   "version": "0.1.0",
   "capabilities": [],
   "extensions": {
-    "org.agentsware.opengeneral.description": "Minimal persona with no declared external behavior capabilities."
+    "opengeneral.description": "Minimal persona with no declared external behavior capabilities.",
+    "opengeneral.skills": []
   }
 }
