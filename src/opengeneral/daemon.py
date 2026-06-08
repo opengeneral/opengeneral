@@ -12,12 +12,17 @@ from opengeneral.agent_factory import create_agent
 from opengeneral.config import (
     DEFAULT_ACTION_PLANES_CONFIG_PATH,
     DEFAULT_AGENTS_CONFIG_PATH,
+    DEFAULT_KEYS_CONFIG_PATH,
     ActionPlaneConfig,
     ActionPlanesConfig,
     AgentConfig,
     AgentsConfig,
+    KeysConfig,
 )
 from opengeneral.daemon_client import DEFAULT_DAEMON_HOST, DEFAULT_DAEMON_PORT
+from opengeneral.keyring_store import get_secret
+from opengeneral.provider_factory import create_provider
+from opengeneral.providers import ChatProvider
 from opengeneral.personas import AgentPersona, PersonaRegistry
 from opengeneral.runtime import AgentRuntime
 
@@ -29,6 +34,7 @@ class RunningAgent:
     persona: AgentPersona
     runtime: AgentRuntime
     agent: GeneralPurposeAgent
+    provider: ChatProvider
     status: str = "idle"
     last_error: str | None = None
 
@@ -68,12 +74,19 @@ class AgentManager:
             identity=config.agent_id,
             agent_name=config.name,
         )
+        keys_config = KeysConfig.from_path(DEFAULT_KEYS_CONFIG_PATH)
+        key_config = keys_config.keys.get(config.key)
+        if key_config is None:
+            raise ValueError(f"Key not found: {config.key}")
+        secret = get_secret(config.key) if key_config.provider_type != "static" else ""
+        provider = create_provider(key_config, secret, config.model)
         running = RunningAgent(
             config=config,
             action_plane=action_plane,
             persona=persona,
             runtime=runtime,
-            agent=create_agent(persona, runtime),
+            agent=create_agent(persona, runtime, provider),
+            provider=provider,
         )
         self.agents[config.name] = running
         return running
@@ -105,6 +118,8 @@ class AgentManager:
             "id": running.config.agent_id,
             "persona": running.config.persona_tag,
             "action_plane": running.config.action_plane,
+            "key": running.config.key,
+            "model": running.config.model,
             "status": running.status,
             "last_error": running.last_error,
         }
@@ -164,6 +179,8 @@ class OpenGeneralDaemon(socketserver.ThreadingTCPServer):
                         agent_id=params["id"],
                         persona_tag=params["persona"],
                         action_plane=params["action_plane"],
+                        key=params["key"],
+                        model=params["model"],
                     )
                 )
             )

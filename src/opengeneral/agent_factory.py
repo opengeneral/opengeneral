@@ -3,11 +3,16 @@ from __future__ import annotations
 from opengeneral.agent import AgentConstruction, GeneralPurposeAgent
 from opengeneral.personas import AgentPersona
 from opengeneral.prompt import PromptAssembler, PromptContext
+from opengeneral.providers import ChatProvider
 from opengeneral.runtime import AgentRuntime
 from opengeneral.skills import SkillRegistry
 
 
-def create_agent(persona: AgentPersona, runtime: AgentRuntime) -> GeneralPurposeAgent:
+def create_agent(
+    persona: AgentPersona,
+    runtime: AgentRuntime,
+    provider: ChatProvider,
+) -> GeneralPurposeAgent:
     manifest = persona.manifest
     if runtime.agent_name is None:
         raise ValueError("agent_name is required to construct an agent")
@@ -24,4 +29,4 @@ def create_agent(persona: AgentPersona, runtime: AgentRuntime) -> GeneralPurpose
         skills=skills,
         assembled_prompt=assembled_prompt,
     )
-    return GeneralPurposeAgent(runtime, construction)
+    return GeneralPurposeAgent(runtime, construction, provider)

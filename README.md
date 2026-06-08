@@ -59,15 +59,27 @@ pip install -e '.[dev]'
 
 You can also run without installing by setting `PYTHONPATH=src` in front of commands.
 
-### 2. Configure an Action Plane
+### 2. Add an API key
 
 OpenGeneral stores user configuration and user-installed personas under:
 
 ```text
+~/.opengeneral/keys.json
 ~/.opengeneral/action-planes.json
 ~/.opengeneral/agents.json
 ~/.opengeneral/personas/*.json
 ```
+
+API keys are stored as named entries. The metadata (name, provider type, optional base URL) lives in `keys.json`; the actual secret is stored in the OS keyring under the service `opengeneral`.
+
+```bash
+opengeneral keys add personal-anthropic --type anthropic
+# Prompts (hidden) for the API key secret and stores it in the OS keyring.
+```
+
+You can keep multiple keys per provider — pick distinct, readable names like `personal-anthropic` and `work-anthropic` so each agent can pick the right one.
+
+### 3. Configure an Action Plane
 
 Configure a default Action Plane endpoint:
 
@@ -83,7 +95,7 @@ opengeneral action-planes add prod \
   --endpoint https://action-plane.company.com/mcp
 ```
 
-### 3. Start the daemon
+### 4. Start the daemon
 
 ```bash
 opengeneral daemon start
@@ -92,13 +104,23 @@ opengeneral daemon status
 
 OpenGeneral uses one local supervisor daemon to manage all running agents.
 
-### 4. Spawn an agent from a persona
+### 5. Spawn an agent from a persona
 
 ```bash
 opengeneral spawn --persona coder --name coder
 ```
 
-This creates a running daemon-managed agent named `coder` with a generated ID prefixed with the persona name, such as:
+`spawn` is interactive when `--key` and `--model` are not supplied. It will prompt to choose a provider, then select (or add) an API key for that provider, then enter the model name.
+
+To skip the prompts, pass everything inline:
+
+```bash
+opengeneral spawn --persona coder --name coder \
+  --key personal-anthropic \
+  --model anthropic/claude-opus-4-7
+```
+
+Either form creates a running daemon-managed agent named `coder` with a generated ID prefixed with the persona name, such as:
 
 ```text
 coder-a1b2c3d4e5f6
@@ -106,13 +128,13 @@ coder-a1b2c3d4e5f6
 
 The generated ID is also the Action Plane identity. The Action Plane remains responsible for authentication, policy, tool filtering, argument restrictions, and audit.
 
-### 5. Talk to the agent
+### 6. Talk to the agent
 
 ```bash
 opengeneral talk coder
 ```
 
-### 6. Run tests
+### 7. Run tests
 
 ```bash
 pytest

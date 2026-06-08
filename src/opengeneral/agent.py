@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 
 from opengeneral.mcp import MCPToolCall, MCPToolResult
+from opengeneral.providers import ChatMessage, ChatProvider, ChatRequest
 from opengeneral.runtime import AgentRuntime
 from opengeneral.skills import AgentSkill
 
@@ -11,7 +12,6 @@ _TOOL_REQUEST = re.compile(
     r"^use\s+(?P<server_id>\S+)\s+(?P<tool_name>\S+)(?:\s+(?P<payload>.*))?$"
 )
 _EMPTY_PROMPT_HINT = "Give me a goal, or type '/tools' to inspect available tools."
-_READY_PREFIX = "I'm ready to work on that"
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,7 @@ class AgentConstruction:
 class GeneralPurposeAgent:
     runtime: AgentRuntime
     construction: AgentConstruction
+    provider: ChatProvider
 
     async def respond(self, message: str) -> str:
         request = message.strip()
@@ -40,7 +41,7 @@ class GeneralPurposeAgent:
 
         match = _TOOL_REQUEST.match(request)
         if match is None:
-            return self._reason(request)
+            return await self._reason(request)
 
         result = await self.runtime.call_tool(
             MCPToolCall(
@@ -51,10 +52,16 @@ class GeneralPurposeAgent:
         )
         return self._render_tool_result(result)
 
-    def _reason(self, message: str) -> str:
+    async def _reason(self, message: str) -> str:
         if not message:
             return _EMPTY_PROMPT_HINT
-        return f"{_READY_PREFIX}: {message}"
+        response = await self.provider.complete(
+            ChatRequest(
+                system=self.construction.assembled_prompt,
+                messages=(ChatMessage("user", message),),
+            )
+        )
+        return response.content
 
     def _render_skills(self) -> str:
         if not self.construction.skills:

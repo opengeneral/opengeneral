@@ -49,10 +49,10 @@ class DaemonClient:
     def stop(self) -> Any:
         return self.request("daemon.stop")
 
-    def spawn_agent(self, name: str, persona: str, action_plane: str, agent_id: str) -> Any:
+    def spawn_agent(self, name: str, persona: str, action_plane: str, key: str, model: str, agent_id: str) -> Any:
         return self.request(
             "agent.spawn",
-            {"name": name, "id": agent_id, "persona": persona, "action_plane": action_plane},
+            {"name": name, "id": agent_id, "persona": persona, "action_plane": action_plane, "key": key, "model": model},
         )
 
     def list_agents(self) -> Any:

@@ -5,7 +5,9 @@ description = "A general-purpose agent runtime, initially demonstrated with a co
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "jsonschema>=4.22.0"
+  "jsonschema>=4.22.0",
+  "litellm>=1.80.0",
+  "keyring>=24.0.0"
 ]
 
 [project.optional-dependencies]

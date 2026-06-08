@@ -1,0 +1,10 @@
+{
+  "keys": {
+    "personal-anthropic": {
+      "type": "anthropic"
+    },
+    "work-openai": {
+      "type": "openai"
+    }
+  }
+}

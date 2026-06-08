@@ -6,6 +6,7 @@ from typing import Any
 from opengeneral.agent import AgentConstruction, GeneralPurposeAgent
 from opengeneral.manifest import AgentCapabilityManifest
 from opengeneral.mcp import MCPToolResult
+from opengeneral.providers import ChatRequest, ChatResponse
 from opengeneral.runtime import AgentRuntime
 from opengeneral.skills import AgentSkill
 
@@ -21,7 +22,19 @@ class FakeMCPClient:
         return MCPToolResult(f"{name}: {arguments['input']}")
 
 
-def agent(construction: AgentConstruction | None = None) -> GeneralPurposeAgent:
+class FakeProvider:
+    def __init__(self) -> None:
+        self.requests: list[ChatRequest] = []
+
+    async def complete(self, request: ChatRequest) -> ChatResponse:
+        self.requests.append(request)
+        return ChatResponse(f"provider: {request.messages[-1].content}")
+
+
+def agent(
+    construction: AgentConstruction | None = None,
+    provider: FakeProvider | None = None,
+) -> GeneralPurposeAgent:
     manifest = AgentCapabilityManifest.from_mapping(
         {"id": "org:test/agent:test-v1", "capabilities": []}
     )
@@ -34,6 +47,7 @@ def agent(construction: AgentConstruction | None = None) -> GeneralPurposeAgent:
             identity=None,
         ),
         construction or AgentConstruction(skills=(), assembled_prompt="Test prompt."),
+        provider or FakeProvider(),
     )
 
 
@@ -67,10 +81,13 @@ async def test_agent_uses_mcp_for_requested_tool_call() -> None:
     assert response == "echo: hello"
 
 
-async def test_agent_uses_default_ready_response() -> None:
-    response = await agent().respond("plan a refactor")
+async def test_agent_uses_provider_for_normal_messages() -> None:
+    provider = FakeProvider()
 
-    assert response == "I'm ready to work on that: plan a refactor"
+    response = await agent(provider=provider).respond("plan a refactor")
+
+    assert response == "provider: plan a refactor"
+    assert provider.requests[0].system == "Test prompt."
 
 
 async def test_agent_uses_default_empty_message_hint() -> None:
