@@ -77,6 +77,10 @@ pip install -e '.[build]'           # one-time: get PyInstaller
 
 The frozen binary is service-manager aware on every platform: `opengeneral daemon install` writes a systemd unit / launchd agent / Windows service whose launch command is the installed binary plus `daemon run`.
 
+### Releases
+
+Pushing a `v*` tag (e.g. `v0.1.0`) runs `.github/workflows/release.yml`, which runs the tests, builds binaries on Linux (x86_64), macOS (x86_64 + arm64), and Windows (x86_64), and publishes them with checksums to a GitHub Release. A manual run (`workflow_dispatch`) builds the same binaries as downloadable artifacts without publishing. The binaries are unsigned, so macOS Gatekeeper / Windows SmartScreen will warn on first launch.
+
 ## Usage guide
 
 ### 1. Install for local development
@@ -86,6 +90,8 @@ pip install -e '.[dev]'
 ```
 
 You can also run without installing by setting `PYTHONPATH=src` in front of commands. Prefer the binary above for normal use.
+
+On Linux/macOS a `Makefile` wraps the common tasks — run `make help` to list them (`make dev`, `make test`, `make build`, `make install-bin`, `make clean`).
 
 ### 2. Add an API key
 

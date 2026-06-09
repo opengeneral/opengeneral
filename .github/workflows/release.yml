@@ -1,0 +1,118 @@
+name: release
+
+# Build a self-contained binary for each OS and publish them to a GitHub Release.
+# PyInstaller cannot cross-compile, so each platform builds on its own runner.
+#
+# Push a tag like v0.1.0 to build + publish a release. A manual run
+# (workflow_dispatch) builds the binaries and uploads them as workflow artifacts
+# without creating a release — handy for smoke-testing the build on all platforms.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dev dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: Run tests
+        run: python -m pytest -q
+
+  build:
+    name: build (${{ matrix.target }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+          - os: macos-13
+            target: macos-x86_64
+          - os: macos-14
+            target: macos-arm64
+          - os: windows-latest
+            target: windows-x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: python -m pip install -e '.[build]'
+
+      - name: Build binary (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          PYTHON: python
+        run: ./packaging/build.sh
+
+      - name: Build binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./packaging/build.ps1
+
+      - name: Stage asset (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          cp dist/opengeneral "release-assets/opengeneral-${{ matrix.target }}"
+
+      - name: Stage asset (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          Copy-Item dist/opengeneral.exe "release-assets/opengeneral-${{ matrix.target }}.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opengeneral-${{ matrix.target }}
+          path: release-assets/*
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-all
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          cd dist-all
+          sha256sum opengeneral-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-all/opengeneral-*
+            dist-all/SHA256SUMS
+          generate_release_notes: true
+          fail_on_unmatched_files: true
