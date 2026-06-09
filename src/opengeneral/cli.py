@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-import argparse
-import getpass
 import subprocess
 import sys
+from enum import Enum
+from typing import Callable, Optional
 from uuid import uuid4
+
+import typer
+from typing_extensions import Annotated
 
 from opengeneral.config import (
     DEFAULT_ACTION_PLANE,
@@ -24,18 +27,23 @@ from opengeneral.personas import PersonaNotFoundError, PersonaRegistry
 from opengeneral.runner import AgentChatRunner
 
 
+class ProviderType(str, Enum):
+    anthropic = "anthropic"
+    openai = "openai"
+
+
 def create_agent_id(persona_tag: str) -> str:
     return f"{persona_tag}-{uuid4().hex[:12]}"
 
 
 def prompt(label: str) -> str:
-    return input(f"{label}: ").strip()
+    return typer.prompt(label, default="", show_default=False).strip()
 
 
 def choose_provider_type() -> str:
-    print("Select a provider:")
+    typer.echo("Select a provider:")
     for index, provider_type in enumerate(SUPPORTED_PROVIDER_TYPES, 1):
-        print(f"  {index}. {provider_type}")
+        typer.echo(f"  {index}. {provider_type}")
     choice = prompt("Provider")
     if choice.isdigit():
         selected = int(choice)
@@ -49,10 +57,10 @@ def choose_provider_type() -> str:
 def choose_key(config: KeysConfig, provider_type: str) -> str:
     candidates = config.for_provider(provider_type)
     if candidates:
-        print(f"Select an API key for {provider_type}:")
+        typer.echo(f"Select an API key for {provider_type}:")
         for index, key in enumerate(candidates, 1):
-            print(f"  {index}. {key.name}")
-        print(f"  {len(candidates) + 1}. Add a new API key")
+            typer.echo(f"  {index}. {key.name}")
+        typer.echo(f"  {len(candidates) + 1}. Add a new API key")
         choice = prompt("API key")
         if choice.isdigit():
             selected = int(choice)
@@ -72,7 +80,7 @@ def add_key_interactively(config: KeysConfig, provider_type: str) -> str:
         raise ValueError("API key name is required.")
     if name in config.keys:
         raise ValueError(f"API key already exists: {name}")
-    secret = getpass.getpass("API key secret: ")
+    secret = typer.prompt("API key secret", hide_input=True)
     if not secret:
         raise ValueError("API key secret is required.")
     base_url = prompt("Base URL (optional, blank for default)") or None
@@ -244,7 +252,7 @@ def add_key(name: str, provider_type: str, base_url: str | None) -> str:
     config = KeysConfig.from_path(DEFAULT_KEYS_CONFIG_PATH)
     if name in config.keys:
         return f"API key already exists: {name}"
-    secret = getpass.getpass("API key secret: ")
+    secret = typer.prompt("API key secret", hide_input=True)
     if not secret:
         return "API key secret is required."
     keys = dict(config.keys)
@@ -289,138 +297,147 @@ def stop_daemon() -> str:
     return "Stopped OpenGeneral daemon"
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the OpenGeneral reference agent.")
-    subparsers = parser.add_subparsers(dest="command")
-
-    personas = subparsers.add_parser("personas", help="Inspect available personas.")
-    personas_subparsers = personas.add_subparsers(dest="personas_command", required=True)
-    personas_subparsers.add_parser("list", help="List known personas.")
-    personas_show = personas_subparsers.add_parser("show", help="Show a persona.")
-    personas_show.add_argument("persona")
-
-    keys = subparsers.add_parser("keys", help="Manage API keys stored in the OS keyring.")
-    keys_subparsers = keys.add_subparsers(dest="keys_command", required=True)
-    keys_subparsers.add_parser("list", help="List API keys.")
-    keys_show = keys_subparsers.add_parser("show", help="Show an API key.")
-    keys_show.add_argument("name")
-    keys_remove = keys_subparsers.add_parser("remove", help="Remove an API key.")
-    keys_remove.add_argument("name")
-    keys_add = keys_subparsers.add_parser("add", help="Add an API key (prompts for the secret).")
-    keys_add.add_argument("name")
-    keys_add.add_argument("--type", choices=SUPPORTED_PROVIDER_TYPES, required=True)
-    keys_add.add_argument("--base-url")
-
-    action_planes = subparsers.add_parser("action-planes", help="Manage action plane endpoints.")
-    action_planes_subparsers = action_planes.add_subparsers(
-        dest="action_planes_command", required=True
-    )
-    action_planes_subparsers.add_parser("list", help="List action planes.")
-    action_planes_show = action_planes_subparsers.add_parser("show", help="Show an action plane.")
-    action_planes_show.add_argument("name")
-    action_planes_remove = action_planes_subparsers.add_parser("remove", help="Remove an action plane.")
-    action_planes_remove.add_argument("name")
-    action_planes_add = action_planes_subparsers.add_parser("add", help="Add an action plane.")
-    action_planes_add.add_argument("name")
-    action_planes_add.add_argument("--endpoint", required=True)
-
-    agents = subparsers.add_parser("agents", help="Inspect spawned agents.")
-    agents_subparsers = agents.add_subparsers(dest="agents_command", required=True)
-    agents_subparsers.add_parser("list", help="List spawned agents.")
-    agents_show = agents_subparsers.add_parser("show", help="Show a spawned agent.")
-    agents_show.add_argument("name")
-    agents_remove = agents_subparsers.add_parser("remove", help="Remove a spawned agent.")
-    agents_remove.add_argument("name")
-
-    daemon = subparsers.add_parser("daemon", help="Manage the OpenGeneral daemon.")
-    daemon_subparsers = daemon.add_subparsers(dest="daemon_command", required=True)
-    daemon_subparsers.add_parser("start", help="Start the daemon.")
-    daemon_subparsers.add_parser("status", help="Show daemon status.")
-    daemon_subparsers.add_parser("stop", help="Stop the daemon.")
-
-    talk = subparsers.add_parser("talk", help="Open a chat with a spawned agent.")
-    talk.add_argument("name")
-
-    spawn = subparsers.add_parser("spawn", help="Spawn an agent from a persona.")
-    spawn.add_argument("--persona", required=True)
-    spawn.add_argument("--name", required=True)
-    spawn.add_argument("--action-plane", default=DEFAULT_ACTION_PLANE)
-    spawn.add_argument("--key")
-    spawn.add_argument("--model")
-
-    args = parser.parse_args()
-
+def _run(func: Callable[..., str], *args: object, **kwargs: object) -> None:
     try:
-        if args.command == "personas":
-            if args.personas_command == "list":
-                print(render_personas())
-                return
-            print(render_persona(args.persona))
-            return
-
-        if args.command == "keys":
-            if args.keys_command == "list":
-                print(render_keys())
-                return
-            if args.keys_command == "show":
-                print(show_key(args.name))
-                return
-            if args.keys_command == "remove":
-                print(remove_key(args.name))
-                return
-            print(add_key(args.name, args.type, args.base_url))
-            return
-
-        if args.command == "action-planes":
-            if args.action_planes_command == "list":
-                print(render_action_planes())
-                return
-            if args.action_planes_command == "show":
-                print(show_action_plane(args.name))
-                return
-            if args.action_planes_command == "remove":
-                print(remove_action_plane(args.name))
-                return
-            print(add_action_plane(args.name, args.endpoint))
-            return
-
-        if args.command == "agents":
-            if args.agents_command == "list":
-                print(render_agents())
-                return
-            if args.agents_command == "show":
-                print(show_agent(args.name))
-                return
-            print(remove_agent(args.name))
-            return
-
-        if args.command == "daemon":
-            if args.daemon_command == "start":
-                print(start_daemon())
-                return
-            if args.daemon_command == "status":
-                print(render_daemon_status())
-                return
-            print(stop_daemon())
-            return
-
-        if args.command == "talk":
-            AgentChatRunner(args.name, DaemonClient()).chat(sys.stdin, sys.stdout)
-            return
-
-        if args.command == "spawn":
-            print(start_agent(args.persona, args.action_plane, args.key, args.model, args.name))
-            return
-
-        parser.print_help()
+        result = func(*args, **kwargs)
+        if result is not None:
+            typer.echo(result)
     except DaemonUnavailableError:
-        print(DAEMON_NOT_RUNNING)
+        typer.echo(DAEMON_NOT_RUNNING)
     except PersonaNotFoundError as error:
-        print(f"Persona not found: {error.tag}")
-    except ValueError as error:
-        print(error)
-    except RuntimeError as error:
-        print(error)
+        typer.echo(f"Persona not found: {error.tag}")
+    except (ValueError, RuntimeError) as error:
+        typer.echo(str(error))
+
+
+app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    pretty_exceptions_show_locals=False,
+    help="Run the OpenGeneral reference agent.",
+)
+personas_app = typer.Typer(no_args_is_help=True, help="Inspect available personas.")
+keys_app = typer.Typer(no_args_is_help=True, help="Manage API keys stored in the OS keyring.")
+action_planes_app = typer.Typer(no_args_is_help=True, help="Manage action plane endpoints.")
+agents_app = typer.Typer(no_args_is_help=True, help="Inspect spawned agents.")
+daemon_app = typer.Typer(no_args_is_help=True, help="Manage the OpenGeneral daemon.")
+app.add_typer(personas_app, name="personas")
+app.add_typer(keys_app, name="keys")
+app.add_typer(action_planes_app, name="action-planes")
+app.add_typer(agents_app, name="agents")
+app.add_typer(daemon_app, name="daemon")
+
+
+@personas_app.command("list", help="List known personas.")
+def personas_list_cmd() -> None:
+    _run(render_personas)
+
+
+@personas_app.command("show", help="Show a persona.")
+def personas_show_cmd(persona: str) -> None:
+    _run(render_persona, persona)
+
+
+@keys_app.command("list", help="List API keys.")
+def keys_list_cmd() -> None:
+    _run(render_keys)
+
+
+@keys_app.command("show", help="Show an API key.")
+def keys_show_cmd(name: str) -> None:
+    _run(show_key, name)
+
+
+@keys_app.command("remove", help="Remove an API key and its secret from the OS keyring.")
+def keys_remove_cmd(name: str) -> None:
+    _run(remove_key, name)
+
+
+@keys_app.command("add", help="Add an API key (prompts for the secret).")
+def keys_add_cmd(
+    name: str,
+    provider_type: Annotated[ProviderType, typer.Option("--type", help="Provider type.")],
+    base_url: Annotated[Optional[str], typer.Option("--base-url", help="Override base URL.")] = None,
+) -> None:
+    _run(add_key, name, provider_type.value, base_url)
+
+
+@action_planes_app.command("list", help="List action planes.")
+def action_planes_list_cmd() -> None:
+    _run(render_action_planes)
+
+
+@action_planes_app.command("show", help="Show an action plane.")
+def action_planes_show_cmd(name: str) -> None:
+    _run(show_action_plane, name)
+
+
+@action_planes_app.command("remove", help="Remove an action plane.")
+def action_planes_remove_cmd(name: str) -> None:
+    _run(remove_action_plane, name)
+
+
+@action_planes_app.command("add", help="Add an action plane.")
+def action_planes_add_cmd(
+    name: str,
+    endpoint: Annotated[str, typer.Option("--endpoint", help="MCP endpoint URL.")],
+) -> None:
+    _run(add_action_plane, name, endpoint)
+
+
+@agents_app.command("list", help="List spawned agents.")
+def agents_list_cmd() -> None:
+    _run(render_agents)
+
+
+@agents_app.command("show", help="Show a spawned agent.")
+def agents_show_cmd(name: str) -> None:
+    _run(show_agent, name)
+
+
+@agents_app.command("remove", help="Remove a spawned agent.")
+def agents_remove_cmd(name: str) -> None:
+    _run(remove_agent, name)
+
+
+@daemon_app.command("start", help="Start the daemon.")
+def daemon_start_cmd() -> None:
+    _run(start_daemon)
+
+
+@daemon_app.command("status", help="Show daemon status.")
+def daemon_status_cmd() -> None:
+    _run(render_daemon_status)
+
+
+@daemon_app.command("stop", help="Stop the daemon.")
+def daemon_stop_cmd() -> None:
+    _run(stop_daemon)
+
+
+@app.command("talk", help="Open a chat with a spawned agent.")
+def talk_cmd(name: str) -> None:
+    try:
+        AgentChatRunner(name, DaemonClient()).chat(sys.stdin, sys.stdout)
+    except DaemonUnavailableError:
+        typer.echo(DAEMON_NOT_RUNNING)
+    except (ValueError, RuntimeError) as error:
+        typer.echo(str(error))
+
+
+@app.command("spawn", help="Spawn an agent from a persona.")
+def spawn_cmd(
+    persona: Annotated[str, typer.Option("--persona", help="Persona tag.")],
+    name: Annotated[str, typer.Option("--name", help="Readable agent name.")],
+    action_plane: Annotated[str, typer.Option("--action-plane", help="Configured Action Plane name.")] = DEFAULT_ACTION_PLANE,
+    key: Annotated[Optional[str], typer.Option("--key", help="Configured API key name.")] = None,
+    model: Annotated[Optional[str], typer.Option("--model", help="Model identifier (e.g. anthropic/claude-opus-4-7).")] = None,
+) -> None:
+    _run(start_agent, persona, action_plane, key, model, name)
+
+
+def main() -> None:
+    app()
 
 
 if __name__ == "__main__":
