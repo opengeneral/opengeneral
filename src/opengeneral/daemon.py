@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import signal
 import socketserver
+import sys
+import threading
 from dataclasses import dataclass
 from typing import Any
+
+CONFIG_ERROR_EXIT_CODE = 78
 
 from opengeneral.action_plane import ActionPlaneConnector, EmptyActionPlaneConnector
 from opengeneral.agent import GeneralPurposeAgent
@@ -154,8 +159,36 @@ class OpenGeneralDaemon(socketserver.ThreadingTCPServer):
 
     def __init__(self, host: str, port: int, manager: AgentManager) -> None:
         self.manager = manager
-        self.should_stop = False
+        self._serving = threading.Event()
+        self._shutdown_requested = threading.Event()
         super().__init__((host, port), DaemonRequestHandler)
+
+    def serve_forever(self, poll_interval: float = 0.5) -> None:
+        # Single-use: once request_shutdown() has been called on an instance,
+        # serve_forever() is permanently a no-op for that instance. Construct a
+        # fresh OpenGeneralDaemon to serve again.
+        if self._shutdown_requested.is_set():
+            return
+        self._serving.set()
+        try:
+            super().serve_forever(poll_interval)
+        finally:
+            self._serving.clear()
+
+    def request_shutdown(self) -> None:
+        """Idempotent, deadlock-safe shutdown request.
+
+        Safe to call from any thread, at any time — before serve_forever, during,
+        or after. Pre-serve callers just mark the daemon so serve_forever returns
+        immediately when it would otherwise start.
+        """
+        already = self._shutdown_requested.is_set()
+        self._shutdown_requested.set()
+        if already or not self._serving.is_set():
+            return
+        # Non-daemon so the worker is allowed to finish even if the main thread
+        # is about to exit serve_forever and return from serve().
+        threading.Thread(target=self.shutdown, daemon=False).start()
 
     def handle_request_payload(self, request: dict[str, Any]) -> dict[str, Any]:
         request_id = request.get("id")
@@ -169,7 +202,7 @@ class OpenGeneralDaemon(socketserver.ThreadingTCPServer):
         if method == "daemon.status":
             return self.manager.status()
         if method == "daemon.stop":
-            self.should_stop = True
+            self.request_shutdown()
             return {"status": "stopping"}
         if method == "agent.spawn":
             return asyncio.run(
@@ -194,18 +227,57 @@ class OpenGeneralDaemon(socketserver.ThreadingTCPServer):
             return asyncio.run(self.manager.send_message(params["name"], params["content"]))
         raise ValueError(f"Unknown daemon method: {method}")
 
-    def serve_until_stopped(self) -> None:
-        while not self.should_stop:
-            self.handle_request()
-        self.server_close()
+def serve(host: str = DEFAULT_DAEMON_HOST, port: int = DEFAULT_DAEMON_PORT) -> int:
+    """Run the OpenGeneral daemon. Must be called from the main thread.
 
+    Returns the intended process exit code. Returns CONFIG_ERROR_EXIT_CODE (78)
+    if persisted agent state cannot be loaded — that exit code is paired with
+    `RestartPreventExitStatus=78` in the systemd unit so the supervisor doesn't
+    respawn forever on a configuration problem.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        raise RuntimeError("opengeneral.daemon.serve() must be called from the main thread")
 
-def serve(host: str = DEFAULT_DAEMON_HOST, port: int = DEFAULT_DAEMON_PORT) -> None:
+    # Install signal handlers before any slow setup (agent loading can block on
+    # keyring/network). Until the daemon exists, a stop signal just records intent
+    # so we exit cleanly after setup instead of being killed mid-load by the
+    # default handler.
+    stop_requested = threading.Event()
+    daemon_ref: list[OpenGeneralDaemon | None] = [None]
+
+    def _request_shutdown(*_args: object) -> None:
+        stop_requested.set()
+        daemon = daemon_ref[0]
+        if daemon is not None:
+            daemon.request_shutdown()
+
+    signal.signal(signal.SIGTERM, _request_shutdown)
+    signal.signal(signal.SIGINT, _request_shutdown)
+
     manager = AgentManager()
-    asyncio.run(manager.load_existing())
+    try:
+        asyncio.run(manager.load_existing())
+    except Exception as error:
+        sys.stderr.write(f"OpenGeneral daemon failed to load existing agents: {error}\n")
+        sys.stderr.flush()
+        return CONFIG_ERROR_EXIT_CODE
+
+    if stop_requested.is_set():
+        return 0
+
     daemon = OpenGeneralDaemon(host, port, manager)
-    daemon.serve_until_stopped()
+    daemon_ref[0] = daemon
+    # A signal could have arrived between constructing the daemon and publishing
+    # it above; request_shutdown is idempotent and makes serve_forever a no-op.
+    if stop_requested.is_set():
+        daemon.request_shutdown()
+
+    try:
+        daemon.serve_forever()
+    finally:
+        daemon.server_close()
+    return 0
 
 
 if __name__ == "__main__":
-    serve()
+    sys.exit(serve())

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 import sys
 from enum import Enum
 from typing import Callable, Optional
@@ -9,6 +8,7 @@ from uuid import uuid4
 import typer
 from typing_extensions import Annotated
 
+from opengeneral import service
 from opengeneral.config import (
     DEFAULT_ACTION_PLANE,
     DEFAULT_ACTION_PLANES_CONFIG_PATH,
@@ -274,27 +274,26 @@ def remove_key(name: str) -> str:
 
 
 def render_daemon_status() -> str:
-    result = DaemonClient().status()
-    return f"OpenGeneral daemon {result['status']} ({result['agents']} agents)"
-
-
-def start_daemon() -> str:
+    # The running daemon is the source of truth: if it answers the RPC it is up,
+    # regardless of whether an OS service manager is even present (foreground runs,
+    # containers without systemd). Only fall back to the service manager's view
+    # when the daemon isn't reachable.
+    agents: int | None
     try:
-        DaemonClient().status()
+        agents = DaemonClient().status()["agents"]
     except DaemonUnavailableError:
-        subprocess.Popen(
-            [sys.executable, "-m", "opengeneral.daemon"],
-            start_new_session=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        return "Started OpenGeneral daemon"
-    return "OpenGeneral daemon already running"
+        agents = None
 
+    try:
+        base = service.status()
+    except RuntimeError:
+        if agents is not None:
+            return f"OpenGeneral daemon: running ({agents} agents)"
+        raise
 
-def stop_daemon() -> str:
-    DaemonClient().stop()
-    return "Stopped OpenGeneral daemon"
+    if agents is not None:
+        return f"{base} ({agents} agents)"
+    return base
 
 
 def _run(func: Callable[..., str], *args: object, **kwargs: object) -> None:
@@ -304,10 +303,13 @@ def _run(func: Callable[..., str], *args: object, **kwargs: object) -> None:
             typer.echo(result)
     except DaemonUnavailableError:
         typer.echo(DAEMON_NOT_RUNNING)
+        raise typer.Exit(1)
     except PersonaNotFoundError as error:
         typer.echo(f"Persona not found: {error.tag}")
+        raise typer.Exit(1)
     except (ValueError, RuntimeError) as error:
         typer.echo(str(error))
+        raise typer.Exit(1)
 
 
 app = typer.Typer(
@@ -400,19 +402,40 @@ def agents_remove_cmd(name: str) -> None:
     _run(remove_agent, name)
 
 
-@daemon_app.command("start", help="Start the daemon.")
+@daemon_app.command("install", help="Register the OpenGeneral daemon with the OS service manager.")
+def daemon_install_cmd() -> None:
+    _run(service.install)
+
+
+@daemon_app.command("uninstall", help="Unregister the OpenGeneral daemon from the OS service manager.")
+def daemon_uninstall_cmd() -> None:
+    _run(service.uninstall)
+
+
+@daemon_app.command("start", help="Start the daemon via the OS service manager.")
 def daemon_start_cmd() -> None:
-    _run(start_daemon)
+    _run(service.start)
 
 
-@daemon_app.command("status", help="Show daemon status.")
+@daemon_app.command("status", help="Show the daemon's service status.")
 def daemon_status_cmd() -> None:
     _run(render_daemon_status)
 
 
-@daemon_app.command("stop", help="Stop the daemon.")
+@daemon_app.command("stop", help="Stop the daemon via the OS service manager.")
 def daemon_stop_cmd() -> None:
-    _run(stop_daemon)
+    _run(service.stop)
+
+
+@daemon_app.command(
+    "run",
+    help="Run the daemon in the foreground. Used by the service manager, and as a "
+    "manual fallback where no service manager is available (macOS, containers).",
+)
+def daemon_run_cmd() -> None:
+    from opengeneral.daemon import serve
+
+    raise typer.Exit(serve())
 
 
 @app.command("talk", help="Open a chat with a spawned agent.")

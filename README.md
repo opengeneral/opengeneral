@@ -95,14 +95,31 @@ opengeneral action-planes add prod \
   --endpoint https://action-plane.company.com/mcp
 ```
 
-### 4. Start the daemon
+### 4. Install and start the daemon
+
+OpenGeneral runs as a managed OS service so the supervisor daemon survives terminals and reboots.
 
 ```bash
+opengeneral daemon install
 opengeneral daemon start
 opengeneral daemon status
 ```
 
-OpenGeneral uses one local supervisor daemon to manage all running agents.
+- Linux: installs a per-user `systemd` unit at `~/.config/systemd/user/opengeneral.service`. Run `loginctl enable-linger $USER` once if you want the service to keep running after you log out.
+- macOS: installs a per-user `launchd` agent at `~/Library/LaunchAgents/com.opengeneral.daemon.plist`.
+- Windows: registers a Windows service via `pywin32`.
+
+The service's launch command is pinned at install time (the install output prints it). If that path changes — you rebuild the environment or move a packaged binary — re-run `opengeneral daemon install`.
+
+If the daemon fails to load persisted agents on startup it exits with code 78, and the service definition keeps it from respawning in a tight loop (`RestartPreventExitStatus=78` on systemd, `KeepAlive=Crashed` on launchd). Fix the underlying config (usually a missing keyring secret or a removed agent) and then `opengeneral daemon start`.
+
+In a container or other environment without a supported service manager, run the daemon in the foreground instead:
+
+```bash
+opengeneral daemon run
+```
+
+OpenGeneral uses this single supervisor daemon to manage all running agents.
 
 ### 5. Spawn an agent from a persona
 

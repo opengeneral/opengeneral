@@ -12,7 +12,7 @@ from opengeneral.config import (
     KeyConfig,
     KeysConfig,
 )
-from opengeneral.daemon import AgentManager
+from opengeneral.daemon import AgentManager, OpenGeneralDaemon
 
 
 @pytest.fixture
@@ -74,3 +74,25 @@ async def test_agent_manager_reports_missing_key(isolated_configs: None) -> None
         await manager.spawn(
             AgentConfig("coder", "coder-abc123", "coder", "default", "missing", "test")
         )
+
+
+def test_request_shutdown_before_serve_does_not_deadlock() -> None:
+    """Shutdown requested before serve_forever should make serve_forever a no-op
+    instead of blocking on the never-initialized shutdown event."""
+    # port=0 lets the OS assign a free port at bind time, avoiding a probe/bind race.
+    daemon = OpenGeneralDaemon("127.0.0.1", 0, AgentManager())
+    try:
+        daemon.request_shutdown()  # before serve_forever ever runs
+        # Should return immediately, not block.
+        daemon.serve_forever()
+    finally:
+        daemon.server_close()
+
+
+def test_request_shutdown_is_idempotent() -> None:
+    daemon = OpenGeneralDaemon("127.0.0.1", 0, AgentManager())
+    try:
+        daemon.request_shutdown()
+        daemon.request_shutdown()  # second call is a no-op, not an error
+    finally:
+        daemon.server_close()

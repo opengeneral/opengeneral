@@ -22,6 +22,7 @@ opengeneral personas list
 opengeneral personas show coder
 opengeneral keys add personal-anthropic --type anthropic
 opengeneral action-planes add default --endpoint http://127.0.0.1:4767/mcp
+opengeneral daemon install
 opengeneral daemon start
 opengeneral spawn --persona coder --name coder
 opengeneral agents list
@@ -135,9 +136,35 @@ Remove one configured Action Plane.
 opengeneral action-planes remove default
 ```
 
+### `opengeneral daemon install`
+
+Register the OpenGeneral daemon as a managed service for the current platform.
+
+- Linux: writes a per-user systemd unit at `~/.config/systemd/user/opengeneral.service` and runs `systemctl --user daemon-reload && systemctl --user enable opengeneral.service`. If `daemon-reload` or `enable` fails, the previous unit content (or absence) is restored so the install never leaves an orphan unit on disk.
+- macOS: writes a per-user launchd agent at `~/Library/LaunchAgents/com.opengeneral.daemon.plist` and bootstraps it into the user's GUI domain (`launchctl bootstrap gui/<uid>`). A reinstall boots out the old registration first and rolls back the plist on failure.
+- Windows: registers a Windows service via the SCM using `pywin32`.
+
+```bash
+opengeneral daemon install
+```
+
+The installed service's launch command is pinned to whatever launched the install: a source checkout runs `<python> -m opengeneral.daemon`; a packaged binary runs `<binary> daemon run`. The install output prints the exact command. If that path later changes (you rebuild the environment, move the binary), re-run `opengeneral daemon install`.
+
+On Linux, run `loginctl enable-linger $USER` once if you want the daemon to keep running after you log out of the desktop session.
+
+The daemon protects against config-error restart loops on every platform: if it fails to load its persisted agents (missing keyring secret, corrupt agent config) it exits with code 78. On Linux the unit pairs `Restart=on-failure` with `RestartPreventExitStatus=78`; on macOS the agent uses `KeepAlive=Crashed` (restart on crash, never on a clean exit). Either way a bad config does not respawn in a loop — fix it and run `opengeneral daemon start`.
+
+### `opengeneral daemon uninstall`
+
+Stop the service if it's running and remove its registration. Safe to run when nothing is installed — the command no-ops with a clear message.
+
+```bash
+opengeneral daemon uninstall
+```
+
 ### `opengeneral daemon start`
 
-Start the local supervisor daemon.
+Start the daemon via the OS service manager (`systemctl --user start` or Windows SCM). Idempotent: prints `OpenGeneral daemon already running` if the service is already active.
 
 ```bash
 opengeneral daemon start
@@ -145,19 +172,34 @@ opengeneral daemon start
 
 ### `opengeneral daemon status`
 
-Show daemon status.
+Show the daemon's service status (`running`/`stopped`/`starting`/`stopping`/`failed`/`unknown`) and, when the daemon is reachable, the number of agents it has loaded.
 
 ```bash
 opengeneral daemon status
+# OpenGeneral daemon: running (2 agents)
 ```
+
+State labels are normalized across platforms so scripts can grep the same words on Linux and Windows.
 
 ### `opengeneral daemon stop`
 
-Stop the local supervisor daemon.
+Stop the daemon via the OS service manager. systemd / launchd / SCM sends SIGTERM (or its Windows equivalent); the daemon's canonical `request_shutdown()` handler picks it up and unwinds `serve_forever` cleanly. Idempotent: prints `OpenGeneral daemon already stopped` if it wasn't running.
 
 ```bash
 opengeneral daemon stop
 ```
+
+> All `daemon` subcommands exit non-zero if the OS service manager call fails, so shell scripts can detect setup errors.
+
+### `opengeneral daemon run`
+
+Run the daemon in the foreground until it receives SIGTERM/SIGINT (or the platform equivalent). This is the entry point the installed service uses, and a manual fallback where no service manager is available — a container or WSL1 environment without systemd, for example.
+
+```bash
+opengeneral daemon run
+```
+
+Because it bypasses the service manager, `daemon status` still works against it (status is sourced from the running daemon first, and only falls back to the OS service manager when the daemon isn't reachable).
 
 ### `opengeneral spawn --persona <persona> --name <agent-name> [--action-plane <name>] [--key <name>] [--model <model>]`
 
