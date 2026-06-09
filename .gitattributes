@@ -1,0 +1,4 @@
+# Keep shell scripts LF even when checked out on Windows — a CRLF in the shebang
+# line breaks `#!/usr/bin/env bash`. PowerShell scripts get native CRLF.
+*.sh text eol=lf
+*.ps1 text eol=crlf

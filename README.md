@@ -49,6 +49,34 @@ Skills are cognitive instruction packages loaded from `SKILL.md` files. They sha
 
 The same OpenGeneral harness should be able to spawn agents from any persona against any configured Action Plane.
 
+## Install a binary
+
+For day-to-day use, build a self-contained `opengeneral` binary and put it on your PATH. No Python environment is needed at runtime. PyInstaller does not cross-compile, so build on each target OS.
+
+**Linux / macOS:**
+
+```bash
+pip install -e '.[build]'   # one-time: get PyInstaller
+./packaging/install.sh      # builds dist/opengeneral and installs to ~/.local/bin
+```
+
+- `packaging/build.sh` produces `dist/opengeneral`.
+- `packaging/install.sh` builds if needed, copies the binary to `~/.local/bin` (override with `INSTALL_DIR=...`), and warns if that directory isn't on your PATH. Pass `--with-service` to also run `opengeneral daemon install`.
+- `packaging/uninstall.sh` unregisters the daemon and removes the binary, leaving your config and keyring secrets intact.
+
+**Windows (PowerShell):**
+
+```powershell
+pip install -e '.[build]'           # one-time: get PyInstaller
+.\packaging\install.ps1             # builds dist\opengeneral.exe, installs to %LOCALAPPDATA%\Programs\OpenGeneral
+```
+
+- `build.ps1` / `install.ps1` / `uninstall.ps1` mirror the shell scripts. The install dir is added to your per-user PATH (no admin needed); override with the `INSTALL_DIR` env var.
+- Registering the daemon is the only step that needs Administrator rights (Windows services are registered with the SCM system-wide). `install.ps1 -WithService` and `uninstall.ps1` detect a non-elevated session and **trigger a UAC prompt automatically** for just that step — no need to pre-open an Administrator shell. The bare `opengeneral daemon install` run directly still needs an elevated prompt.
+- If the scripts are blocked by execution policy, run them as `powershell -ExecutionPolicy Bypass -File .\packaging\install.ps1`.
+
+The frozen binary is service-manager aware on every platform: `opengeneral daemon install` writes a systemd unit / launchd agent / Windows service whose launch command is the installed binary plus `daemon run`.
+
 ## Usage guide
 
 ### 1. Install for local development
@@ -57,7 +85,7 @@ The same OpenGeneral harness should be able to spawn agents from any persona aga
 pip install -e '.[dev]'
 ```
 
-You can also run without installing by setting `PYTHONPATH=src` in front of commands.
+You can also run without installing by setting `PYTHONPATH=src` in front of commands. Prefer the binary above for normal use.
 
 ### 2. Add an API key
 
