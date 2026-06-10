@@ -113,40 +113,57 @@ class RunningDaemon:
 @pytest.fixture
 def daemon(binary: str, env: dict[str, str], workdir: Path):
     host = env["OPENGENERAL_DAEMON_HOST"]
-    port = int(env["OPENGENERAL_DAEMON_PORT"])
-    proc = subprocess.Popen(
-        [binary, "daemon", "run"],
-        env=env,
-        cwd=str(workdir),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
 
-    deadline = time.time() + 25
-    ready = False
-    while time.time() < deadline:
-        if proc.poll() is not None:
-            break
-        try:
-            resp = _rpc(host, port, "daemon.status")
-            if resp.get("ok") and resp["result"].get("status") == "running":
-                ready = True
+    # Pre-picking a free port then handing it to a separate process is inherently
+    # racy (another listener can grab the port between probe and bind, which is
+    # more frequent on Windows). Retry on a fresh port if the daemon exits during
+    # startup. The working port is written back to env so the `run` fixture agrees.
+    running: RunningDaemon | None = None
+    last_out = ""
+    for _ in range(4):
+        port = _free_port()
+        env["OPENGENERAL_DAEMON_PORT"] = str(port)
+        proc = subprocess.Popen(
+            [binary, "daemon", "run"],
+            env=env,
+            cwd=str(workdir),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        deadline = time.time() + 25
+        ready = False
+        while time.time() < deadline:
+            if proc.poll() is not None:
                 break
-        except OSError:
-            pass
-        time.sleep(0.3)
+            try:
+                resp = _rpc(host, port, "daemon.status")
+                if resp.get("ok") and resp["result"].get("status") == "running":
+                    ready = True
+                    break
+            except OSError:
+                pass
+            time.sleep(0.3)
 
-    if not ready:
-        proc.terminate()
-        try:
-            out = proc.communicate(timeout=5)[0]
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            out = ""
-        pytest.fail(f"daemon did not become ready (exit={proc.poll()}):\n{out}")
+        if ready:
+            running = RunningDaemon(proc=proc, host=host, port=port)
+            break
 
-    running = RunningDaemon(proc=proc, host=host, port=port)
+        # Failed to come up — capture output, ensure it's dead, then retry.
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                last_out = proc.communicate(timeout=5)[0]
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                last_out = proc.communicate()[0]
+        else:
+            last_out = proc.communicate()[0]
+
+    if running is None:
+        pytest.fail(f"daemon did not become ready after retries:\n{last_out}")
+
     yield running
-    if proc.poll() is None:
+    if running.proc.poll() is None:
         running.stop()
