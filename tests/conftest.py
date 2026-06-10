@@ -1,8 +1,29 @@
 from __future__ import annotations
 
+import platform
+
 import keyring
 import keyring.backend
 import pytest
+
+try:
+    import allure
+
+    _HAS_ALLURE = True
+except ImportError:
+    _HAS_ALLURE = False
+
+
+@pytest.fixture(autouse=True)
+def _allure_os_parameter() -> None:
+    # Tag every test with the OS as an Allure parameter so the merged report keeps
+    # a distinct pass/fail history per platform (history keys off parameters, not
+    # labels). No-op when allure-pytest isn't installed or --alluredir isn't used.
+    if _HAS_ALLURE:
+        try:
+            allure.dynamic.parameter("os", platform.system())
+        except Exception:
+            pass
 
 
 class _InMemoryKeyring(keyring.backend.KeyringBackend):
