@@ -1,4 +1,9 @@
-# OpenGeneral
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="logos/opengeneral-logo-dark.svg">
+    <img src="logos/opengeneral-logo.svg" alt="OpenGeneral" height="88">
+  </picture>
+</p>
 
 OpenGeneral is a general-purpose runtime for spawning agents from reusable personas.
 
