@@ -135,7 +135,12 @@ jobs:
     if: ${{ always() && github.repository == 'opengeneral/opengeneral' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write   # push the site to the gh-pages branch (state store)
+      pages: write      # deploy to GitHub Pages via the Actions pipeline
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.pages-deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -198,9 +203,27 @@ jobs:
       - name: Build runs index (archive + prune + table)
         run: python3 scripts/allure_runs_index.py gh-pages allure-report site
 
-      - name: Deploy site to GitHub Pages
+      # The gh-pages branch is kept purely as the persistent state store that the
+      # next run reads previous archives + history from. It is NOT the Pages source
+      # (that's "GitHub Actions" below), so this push triggers no Pages build.
+      - name: Persist site to gh-pages (state store)
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: site
+          keep_files: false
+
+      # Serving goes through the official Actions Pages pipeline, which is reliable
+      # (the legacy branch-based pages-build-deployment intermittently 401s).
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: pages-deploy
+        uses: actions/deploy-pages@v4
           keep_files: false
