@@ -90,6 +90,11 @@ On Linux/macOS, `make install-bin` builds and copies the binary to `~/.local/bin
 
 Pushing a `v*` tag (e.g. `v0.1.0`) runs `.github/workflows/release.yml`, which runs the tests, builds binaries on Linux (x86_64), macOS (arm64), and Windows (x86_64), and publishes them with `SHA256SUMS` to a GitHub Release — the assets the installer above downloads. A manual run (`workflow_dispatch`) builds the same binaries as downloadable artifacts without publishing.
 
+### GitHub Actions workflows
+
+- [`docs/ci.md`](docs/ci.md) — the CI workflow: unit, built-binary integration, and installer tests across Linux/macOS/Windows.
+- [`docs/release.md`](docs/release.md) — the release workflow: per-platform binary builds published to GitHub Releases on a `v*` tag.
+
 ## Usage guide
 
 ### 1. Install for local development
