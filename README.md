@@ -79,7 +79,9 @@ The frozen binary is service-manager aware on every platform: `opengeneral daemo
 
 ### Releases
 
-Pushing a `v*` tag (e.g. `v0.1.0`) runs `.github/workflows/release.yml`, which runs the tests, builds binaries on Linux (x86_64), macOS (arm64), and Windows (x86_64), and publishes them with checksums to a GitHub Release. Intel Macs run the arm64 build under Rosetta 2. A manual run (`workflow_dispatch`) builds the same binaries as downloadable artifacts without publishing. The binaries are unsigned, so macOS Gatekeeper / Windows SmartScreen will warn on first launch.
+Pushing a `v*` tag (e.g. `v0.1.0`) runs `.github/workflows/release.yml`, which runs the tests, builds binaries on Linux (x86_64), macOS (arm64), and Windows (x86_64), and publishes them with checksums to a GitHub Release. Intel Macs run the arm64 build under Rosetta 2. A manual run (`workflow_dispatch`) builds the same archives as downloadable artifacts without publishing. The binaries are unsigned, so macOS Gatekeeper / Windows SmartScreen will warn on first launch.
+
+Each platform asset is an archive (`.tar.gz` for Linux/macOS, `.zip` for Windows) containing the binary plus its `install`/`uninstall` scripts. Download the one for your platform, extract it, and run the bundled `install.sh` (or `install.ps1`) — the script installs the binary sitting next to it, so no build step is needed.
 
 ## Usage guide
 

@@ -1,13 +1,14 @@
 <#
 .SYNOPSIS
-Install the locally-built opengeneral.exe onto the user's PATH.
+Install the opengeneral.exe binary onto the user's PATH.
 
 .DESCRIPTION
-Builds the binary first if dist\opengeneral.exe is missing. Copies it to
-%LOCALAPPDATA%\Programs\OpenGeneral by default (override with INSTALL_DIR env var)
-and adds that directory to the per-user PATH. Pass -WithService to also register
-the daemon — that step needs an elevated (Administrator) prompt because Windows
-services are registered system-wide.
+Works both from a release download (the binary ships next to this script) and
+from a source checkout (builds dist\opengeneral.exe if needed). Copies the binary
+to %LOCALAPPDATA%\Programs\OpenGeneral by default (override with INSTALL_DIR env
+var) and adds that directory to the per-user PATH. Pass -WithService to also
+register the daemon — that step needs an elevated (Administrator) prompt because
+Windows services are registered system-wide.
 #>
 [CmdletBinding()]
 param(
@@ -16,13 +17,29 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'elevation.ps1')
-$RepoRoot = Split-Path -Parent $PSScriptRoot
 $InstallDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs\OpenGeneral' }
-$BinSource = Join-Path $RepoRoot 'dist\opengeneral.exe'
 
-if (-not (Test-Path $BinSource)) {
-  Write-Host "No binary at $BinSource — building it first."
-  & (Join-Path $PSScriptRoot 'build.ps1')
+# Locate the binary to install:
+#   1. one shipped alongside this script (release download/archive)
+#   2. the repo build output, building it if this is a source checkout
+$sibling = Get-ChildItem -Path $PSScriptRoot -Filter 'opengeneral*.exe' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($sibling) {
+  $BinSource = $sibling.FullName
+}
+else {
+  $RepoRoot = Split-Path -Parent $PSScriptRoot
+  $BinSource = Join-Path $RepoRoot 'dist\opengeneral.exe'
+  if (-not (Test-Path $BinSource)) {
+    $buildScript = Join-Path $PSScriptRoot 'build.ps1'
+    if (Test-Path $buildScript) {
+      Write-Host "No binary found — building from source."
+      & $buildScript
+    }
+    else {
+      Write-Error "No opengeneral.exe found next to this script or at $BinSource"
+      exit 1
+    }
+  }
 }
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Install the locally-built `opengeneral` binary onto the user's PATH.
+# Install the `opengeneral` binary onto the user's PATH.
 #
-# Builds the binary first if dist/opengeneral is missing. Copies it to
+# Works both from a release download (the binary ships next to this script) and
+# from a source checkout (builds dist/opengeneral if needed). Copies the binary to
 # ~/.local/bin by default (override with INSTALL_DIR=...). Pass --with-service to
 # also register the daemon with the OS service manager.
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
-BIN_SOURCE="$REPO_ROOT/dist/opengeneral"
 WITH_SERVICE=0
 
 for arg in "$@"; do
@@ -18,9 +18,28 @@ for arg in "$@"; do
   esac
 done
 
-if [[ ! -x "$BIN_SOURCE" ]]; then
-  echo "No binary at $BIN_SOURCE — building it first."
-  "$REPO_ROOT/packaging/build.sh"
+# Locate the binary to install:
+#   1. one shipped alongside this script (release download/archive)
+#   2. the repo build output, building it if this is a source checkout
+BIN_SOURCE=""
+for cand in "$SCRIPT_DIR/opengeneral" "$SCRIPT_DIR"/opengeneral-*; do
+  if [[ -f "$cand" && "$cand" != *.sh && "$cand" != *.ps1 ]]; then
+    BIN_SOURCE="$cand"
+    break
+  fi
+done
+if [[ -z "$BIN_SOURCE" ]]; then
+  REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  BIN_SOURCE="$REPO_ROOT/dist/opengeneral"
+  if [[ ! -x "$BIN_SOURCE" ]]; then
+    if [[ -x "$REPO_ROOT/packaging/build.sh" ]]; then
+      echo "No binary found — building from source."
+      "$REPO_ROOT/packaging/build.sh"
+    else
+      echo "No opengeneral binary found next to this script or at $BIN_SOURCE." >&2
+      exit 1
+    fi
+  fi
 fi
 
 mkdir -p "$INSTALL_DIR"
