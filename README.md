@@ -49,39 +49,46 @@ Skills are cognitive instruction packages loaded from `SKILL.md` files. They sha
 
 The same OpenGeneral harness should be able to spawn agents from any persona against any configured Action Plane.
 
-## Install a binary
+## Install
 
-For day-to-day use, build a self-contained `opengeneral` binary and put it on your PATH. No Python environment is needed at runtime. PyInstaller does not cross-compile, so build on each target OS.
+OpenGeneral ships as a self-contained binary — no Python environment is needed at runtime.
 
-**Linux / macOS:**
+**Linux / macOS (Apple Silicon):**
 
 ```bash
-pip install -e '.[build]'   # one-time: get PyInstaller
-./packaging/install.sh      # builds dist/opengeneral and installs to ~/.local/bin
+curl -LsSf https://raw.githubusercontent.com/opengeneral/opengeneral/main/install.sh | sh
 ```
-
-- `packaging/build.sh` produces `dist/opengeneral`.
-- `packaging/install.sh` builds if needed, copies the binary to `~/.local/bin` (override with `INSTALL_DIR=...`), and warns if that directory isn't on your PATH. Pass `--with-service` to also run `opengeneral daemon install`.
-- `packaging/uninstall.sh` unregisters the daemon and removes the binary, leaving your config and keyring secrets intact.
 
 **Windows (PowerShell):**
 
 ```powershell
-pip install -e '.[build]'           # one-time: get PyInstaller
-.\packaging\install.ps1             # builds dist\opengeneral.exe, installs to %LOCALAPPDATA%\Programs\OpenGeneral
+irm https://raw.githubusercontent.com/opengeneral/opengeneral/main/install.ps1 | iex
 ```
 
-- `build.ps1` / `install.ps1` / `uninstall.ps1` mirror the shell scripts. The install dir is added to your per-user PATH (no admin needed); override with the `INSTALL_DIR` env var.
-- Registering the daemon is the only step that needs Administrator rights (Windows services are registered with the SCM system-wide). `install.ps1 -WithService` and `uninstall.ps1` detect a non-elevated session and **trigger a UAC prompt automatically** for just that step — no need to pre-open an Administrator shell. The bare `opengeneral daemon install` run directly still needs an elevated prompt.
-- If the scripts are blocked by execution policy, run them as `powershell -ExecutionPolicy Bypass -File .\packaging\install.ps1`.
+The installer downloads the matching binary from the latest GitHub Release, verifies its checksum, and installs it to `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\Programs\OpenGeneral` (Windows, added to your per-user PATH). Useful flags:
 
-The frozen binary is service-manager aware on every platform: `opengeneral daemon install` writes a systemd unit / launchd agent / Windows service whose launch command is the installed binary plus `daemon run`.
+- `--with-service` (`-WithService` on Windows) also registers the background daemon. On Windows that step prompts for Administrator elevation automatically.
+- `--uninstall` (`-Uninstall`) unregisters the daemon and removes the binary, leaving your config and keyring secrets intact.
+- `--version=vX.Y.Z` (`-Version`) installs a specific release; `INSTALL_DIR` overrides the install directory.
+
+The binaries are unsigned, so macOS Gatekeeper / Windows SmartScreen may warn on first launch. The frozen binary is service-manager aware: `opengeneral daemon install` writes a systemd unit / launchd agent / Windows service whose launch command is the installed binary plus `daemon run`.
+
+**Intel Macs** have no prebuilt binary (Rosetta runs Intel binaries on Apple Silicon, not the reverse) — build from source instead (see below).
+
+### Build from source
+
+PyInstaller does not cross-compile, so build on the target OS:
+
+```bash
+pip install -e '.[build]'   # get PyInstaller + deps
+./packaging/build.sh        # -> dist/opengeneral  (build.ps1 on Windows -> dist\opengeneral.exe)
+```
+
+On Linux/macOS, `make install-bin` builds and copies the binary to `~/.local/bin` (override with `INSTALL_DIR`); `make uninstall-bin` reverses it.
 
 ### Releases
 
-Pushing a `v*` tag (e.g. `v0.1.0`) runs `.github/workflows/release.yml`, which runs the tests, builds binaries on Linux (x86_64), macOS (arm64), and Windows (x86_64), and publishes them with checksums to a GitHub Release. Intel Macs run the arm64 build under Rosetta 2. A manual run (`workflow_dispatch`) builds the same archives as downloadable artifacts without publishing. The binaries are unsigned, so macOS Gatekeeper / Windows SmartScreen will warn on first launch.
-
-Each platform asset is an archive (`.tar.gz` for Linux/macOS, `.zip` for Windows) containing the binary plus its `install`/`uninstall` scripts. Download the one for your platform, extract it, and run the bundled `install.sh` (or `install.ps1`) — the script installs the binary sitting next to it, so no build step is needed.
+Pushing a `v*` tag (e.g. `v0.1.0`) runs `.github/workflows/release.yml`, which runs the tests, builds binaries on Linux (x86_64), macOS (arm64), and Windows (x86_64), and publishes them with `SHA256SUMS` to a GitHub Release — the assets the installer above downloads. A manual run (`workflow_dispatch`) builds the same binaries as downloadable artifacts without publishing.
 
 ## Usage guide
 

@@ -65,29 +65,19 @@ jobs:
         shell: pwsh
         run: ./packaging/build.ps1
 
-      # Bundle the binary with its install/uninstall scripts so a downloader has
-      # everything needed to install and register the daemon.
-      - name: Package (Unix)
+      - name: Stage binary (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          pkg="opengeneral-${{ matrix.target }}"
-          mkdir -p "stage/$pkg" release-assets
-          cp dist/opengeneral "stage/$pkg/opengeneral"
-          cp packaging/install.sh packaging/uninstall.sh "stage/$pkg/"
-          chmod +x "stage/$pkg/opengeneral" "stage/$pkg/install.sh" "stage/$pkg/uninstall.sh"
-          tar -C stage -czf "release-assets/$pkg.tar.gz" "$pkg"
+          mkdir -p release-assets
+          cp dist/opengeneral "release-assets/opengeneral-${{ matrix.target }}"
 
-      - name: Package (Windows)
+      - name: Stage binary (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $pkg = "opengeneral-${{ matrix.target }}"
-          New-Item -ItemType Directory -Force "stage/$pkg" | Out-Null
           New-Item -ItemType Directory -Force release-assets | Out-Null
-          Copy-Item dist/opengeneral.exe "stage/$pkg/opengeneral.exe"
-          Copy-Item packaging/install.ps1, packaging/uninstall.ps1, packaging/elevation.ps1 "stage/$pkg/"
-          Compress-Archive -Path "stage/$pkg" -DestinationPath "release-assets/$pkg.zip" -Force
+          Copy-Item dist/opengeneral.exe "release-assets/opengeneral-${{ matrix.target }}.exe"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -120,8 +110,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist-all/opengeneral-*.tar.gz
-            dist-all/opengeneral-*.zip
+            dist-all/opengeneral-*
             dist-all/SHA256SUMS
           generate_release_notes: true
           fail_on_unmatched_files: true

@@ -1,8 +1,9 @@
 # OpenGeneral developer convenience targets (Linux/macOS).
-# These wrap the same commands the packaging scripts and CI use, so there is one
-# source of truth. On Windows, use the packaging\*.ps1 scripts directly.
+# For installing a release build, end users use the curl installer (./install.sh);
+# these targets are for working from a source checkout.
 
 PYTHON ?= python3
+INSTALL_DIR ?= $(HOME)/.local/bin
 
 .DEFAULT_GOAL := help
 
@@ -25,11 +26,15 @@ test: ## Run the test suite
 build: ## Build the standalone binary into dist/ (PyInstaller)
 	PYTHON=$(PYTHON) ./packaging/build.sh
 
-install-bin: ## Build (if needed) and install the binary onto your PATH
-	./packaging/install.sh
+install-bin: build ## Build and install the local binary onto your PATH
+	mkdir -p $(INSTALL_DIR)
+	install -m 0755 dist/opengeneral $(INSTALL_DIR)/opengeneral
+	@echo "Installed dist/opengeneral to $(INSTALL_DIR)/opengeneral"
 
-uninstall-bin: ## Remove the installed binary and unregister the daemon
-	./packaging/uninstall.sh
+uninstall-bin: ## Unregister the daemon and remove the locally-installed binary
+	-$(INSTALL_DIR)/opengeneral daemon uninstall
+	rm -f $(INSTALL_DIR)/opengeneral
+	@echo "Removed $(INSTALL_DIR)/opengeneral"
 
 clean: ## Remove build artifacts
 	rm -rf build dist
