@@ -4,37 +4,57 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenGeneral cross-platform test runs</title>
+<link rel="icon" type="image/svg+xml" href="logos/opengeneral-icon.svg">
 <style>
-  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem auto; max-width: 1000px; color: #1b1f23; }
-  h1 { font-size: 1.4rem; }
-  p.sub { color: #57606a; margin-top: -0.4rem; }
+  :root {
+    --brand: #6724D6; --brand-light: #8B5CF6; --brand-wash: #f3effc;
+    --ink: #1b1f23; --muted: #57606a; --line: #eaecef;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; color: var(--ink); background: #fff; }
+  header {
+    background: linear-gradient(135deg, #241241 0%, #15082C 100%);
+    padding: 1.6rem 2rem; display: flex; align-items: center; gap: 1rem;
+  }
+  header img { height: 34px; }
+  header .sub { color: #c6a2ff; font-size: 0.9rem; margin-left: auto; }
+  main { max-width: 1040px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+  p.lead { color: var(--muted); margin: 0.2rem 0 1.2rem; }
   table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
-  th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid #eaecef; }
-  th { background: #f6f8fa; }
-  tr:hover td { background: #f6f8fa; }
+  th, td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--line); }
+  thead th { background: var(--brand-wash); color: #3b2566; font-weight: 600; }
+  tbody tr:hover td { background: #faf8ff; }
   td.pass { color: #1a7f37; }
   td.skip { color: #9a6700; }
   td.fail { color: #cf222e; font-weight: 600; }
-  .badge { background: #ddf4ff; color: #0969da; border-radius: 6px; padding: 0 0.4rem; font-size: 0.75rem; }
-  code { background: #f6f8fa; padding: 0.1rem 0.3rem; border-radius: 4px; }
-  a { color: #0969da; text-decoration: none; }
+  .badge { background: var(--brand-wash); color: var(--brand); border: 1px solid #ddd0f5; border-radius: 999px; padding: 0.05rem 0.5rem; font-size: 0.72rem; }
+  code { background: #f6f4fb; padding: 0.1rem 0.3rem; border-radius: 4px; }
+  a { color: var(--brand); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  footer { color: var(--muted); font-size: 0.8rem; text-align: center; padding: 1.5rem; }
 </style>
 </head>
 <body>
-<h1>OpenGeneral &mdash; cross-platform test runs</h1>
-<p class="sub">Click a run to open its full Allure report. Newest first.</p>
+<header>
+  <img src="logos/opengeneral-logo-dark.svg" alt="OpenGeneral">
+  <span class="sub">cross-platform test runs</span>
+</header>
+<main>
+<p class="lead">Click a run to open its full Allure report. Newest first.</p>
 <table>
 <thead><tr>
   <th>Run</th><th>Date (UTC)</th><th>Ref</th><th>Commit</th><th>Trigger</th>
   <th>Passed</th><th>Failed</th><th>Skipped</th><th>Report</th><th>CI</th>
 </tr></thead>
 <tbody>
+<tr><td><a href="runs/9/">#9</a></td><td>2026-06-10 21:58</td><td>main</td><td><a href="https://github.com/opengeneral/opengeneral/commit/74fd3b3426ff1f4d5a78deb7f96f001444a8068d"><code>74fd3b3</code></a></td><td>workflow_dispatch</td><td class="pass">214</td><td>0</td><td class="skip">29</td><td><a href="runs/9/">report</a></td><td><a href="https://github.com/opengeneral/opengeneral/actions/runs/27308753703">CI run</a></td></tr>
 <tr><td><a href="runs/8/">#8</a></td><td>2026-06-10 17:24</td><td>main</td><td><a href="https://github.com/opengeneral/opengeneral/commit/af4dceb8e629b409389178f13df049d898da4fc7"><code>af4dceb</code></a></td><td>workflow_dispatch</td><td class="pass">214</td><td>0</td><td class="skip">29</td><td><a href="runs/8/">report</a></td><td><a href="https://github.com/opengeneral/opengeneral/actions/runs/27293164113">CI run</a></td></tr>
 <tr><td><a href="runs/7/">#7</a></td><td>2026-06-10 16:52</td><td>main</td><td><a href="https://github.com/opengeneral/opengeneral/commit/838d6ef519b3d5518255fad7b94074236836be54"><code>838d6ef</code></a></td><td>workflow_dispatch</td><td class="pass">214</td><td>0</td><td class="skip">23</td><td><a href="runs/7/">report</a></td><td><a href="https://github.com/opengeneral/opengeneral/actions/runs/27291426834">CI run</a></td></tr>
 <tr><td><a href="runs/6/">#6</a></td><td>2026-06-10 16:03</td><td>main</td><td><a href="https://github.com/opengeneral/opengeneral/commit/c2033fff0d766b0718e856ca60a1588d12324a13"><code>c2033ff</code></a></td><td>workflow_dispatch</td><td class="pass">214</td><td>0</td><td class="skip">23</td><td><a href="runs/6/">report</a></td><td><a href="https://github.com/opengeneral/opengeneral/actions/runs/27288593224">CI run</a></td></tr>
 <tr><td><a href="runs/4/">#4</a></td><td>2026-06-10 15:38</td><td>main</td><td><a href="https://github.com/opengeneral/opengeneral/commit/b048fbed5b2481b1acf44af9049710c1315e69f7"><code>b048fbe</code></a></td><td>workflow_dispatch</td><td class="pass">214</td><td>0</td><td class="skip">23</td><td><a href="runs/4/">report</a></td><td><a href="https://github.com/opengeneral/opengeneral/actions/runs/27287249196">CI run</a></td></tr>
 </tbody>
 </table>
+<footer>OpenGeneral &middot; generated by the cross-platform-tests workflow</footer>
+</main>
 </body>
 </html>
