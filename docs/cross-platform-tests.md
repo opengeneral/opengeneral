@@ -59,9 +59,11 @@ without gating the workflow.
 
 ### `report` (Allure -> GitHub Pages)
 `if: always()`, so it reports even when tests fail. Each test job emits Allure
-results (`allure-pytest`; the conftest in `tests/` tags each test with an Epic
-(tier) / Feature (component) so the Behaviors tab is a tidy tree, plus an `os`
-parameter so history is tracked per platform). This job:
+results (`allure-pytest`). The conftest in `tests/` labels every test on two axes:
+the **Behaviors** tab groups by product domain (Epic) / component (Feature) — what
+is tested — and the **Suites** tab groups by tier (Unit / Binary usage /
+Installer) / component — how it runs. Tests are also tagged by tier and OS, with
+the OS recorded as a parameter so history is tracked per platform. This job:
 1. downloads every job's `allure-results-*`,
 2. seeds `history/` from the latest archived run (trend continuity),
 3. writes `environment.properties` + `executor.json` so the report shows the
