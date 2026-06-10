@@ -27,15 +27,22 @@ from pathlib import Path
 KEEP_DISPATCH = 10
 
 
-def _stats(report: Path) -> dict[str, int]:
+def _stats(results: Path) -> dict[str, int]:
+    # Count statuses straight from the allure-results (allure-pytest output); this
+    # is independent of the report format, so it survives Allure version changes.
     out = {"passed": 0, "failed": 0, "skipped": 0, "total": 0}
-    summary = report / "widgets" / "summary.json"
-    if summary.exists():
-        s = json.loads(summary.read_text(encoding="utf-8")).get("statistic", {})
-        out["passed"] = s.get("passed", 0)
-        out["failed"] = s.get("failed", 0) + s.get("broken", 0)
-        out["skipped"] = s.get("skipped", 0)
-        out["total"] = s.get("total", 0)
+    for f in results.glob("*-result.json"):
+        try:
+            status = json.loads(f.read_text(encoding="utf-8")).get("status")
+        except Exception:
+            continue
+        out["total"] += 1
+        if status == "passed":
+            out["passed"] += 1
+        elif status in ("failed", "broken"):
+            out["failed"] += 1
+        elif status == "skipped":
+            out["skipped"] += 1
     return out
 
 
@@ -103,8 +110,9 @@ def _render_index(runs: list[dict], repo: str, server: str) -> str:
 
 def main() -> int:
     old = Path(sys.argv[1] if len(sys.argv) > 1 else "gh-pages")
-    new_report = Path(sys.argv[2] if len(sys.argv) > 2 else "allure-report")
+    new_report = Path(sys.argv[2] if len(sys.argv) > 2 else "report")
     out = Path(sys.argv[3] if len(sys.argv) > 3 else "site")
+    results = Path(sys.argv[4] if len(sys.argv) > 4 else "allure-results")
 
     run = int(os.environ["GITHUB_RUN_NUMBER"])
     ref = os.environ.get("GITHUB_REF_NAME", "")
@@ -115,7 +123,7 @@ def main() -> int:
     server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
     is_release = trigger == "push" and ref.startswith("v")
 
-    stats = _stats(new_report)
+    stats = _stats(results)
     record = {
         "run": run,
         "run_id": run_id,

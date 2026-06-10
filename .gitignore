@@ -221,3 +221,11 @@ __marimo__/
 
 # Claude
 .claude
+
+# Allure / report generation artifacts (CI-produced)
+allure-results/
+allure-report/
+report/
+site/
+history.jsonl
+node_modules/

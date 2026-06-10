@@ -151,17 +151,12 @@ jobs:
           pattern: allure-results-*
           merge-multiple: true
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-node@v4
         with:
-          distribution: temurin
-          java-version: "17"
+          node-version: "20"
 
-      - name: Install Allure CLI
-        run: |
-          VERSION=2.34.1
-          curl -sSL -o allure.tgz "https://github.com/allure-framework/allure2/releases/download/${VERSION}/allure-${VERSION}.tgz"
-          tar -xzf allure.tgz
-          echo "$PWD/allure-${VERSION}/bin" >> "$GITHUB_PATH"
+      - name: Install Allure 3 CLI
+        run: npm install -g allure
 
       - name: Fetch the existing site from gh-pages
         uses: actions/checkout@v4
@@ -170,38 +165,20 @@ jobs:
           path: gh-pages
         continue-on-error: true
 
-      - name: Seed history from the latest archived run
+      - name: Seed history from the persisted ledger
         run: |
-          mkdir -p allure-results/history
-          if [ -f gh-pages/runs.json ]; then
-            prev=$(python3 -c "import json;d=json.load(open('gh-pages/runs.json'));print(max((r['run'] for r in d), default=''))")
-            if [ -n "$prev" ] && [ -d "gh-pages/runs/$prev/history" ]; then
-              cp -r "gh-pages/runs/$prev/history/." allure-results/history/ || true
-            fi
-          elif [ -d gh-pages/history ]; then
-            cp -r gh-pages/history/. allure-results/history/ || true
+          if [ -f gh-pages/history.jsonl ]; then
+            cp gh-pages/history.jsonl history.jsonl
           fi
 
-      - name: Write run metadata (commit / tag / run)
-        run: |
-          {
-            echo "Commit=$GITHUB_SHA"
-            echo "Ref=$GITHUB_REF_NAME"
-            echo "Trigger=$GITHUB_EVENT_NAME"
-            echo "Repository=$GITHUB_REPOSITORY"
-            echo "Run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          } > allure-results/environment.properties
-          owner="${GITHUB_REPOSITORY%%/*}"
-          repo="${GITHUB_REPOSITORY##*/}"
-          printf '{"name":"GitHub Actions","type":"github","buildName":"cross-platform-tests #%s","buildOrder":%s,"buildUrl":"%s/%s/actions/runs/%s","reportUrl":"https://%s.github.io/%s/runs/%s/"}' \
-            "$GITHUB_RUN_NUMBER" "$GITHUB_RUN_NUMBER" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$owner" "$repo" "$GITHUB_RUN_NUMBER" \
-            > allure-results/executor.json
-
       - name: Generate report
-        run: allure generate allure-results --clean -o allure-report
+        run: allure generate allure-results
 
       - name: Build runs index (archive + prune + table)
-        run: python3 scripts/allure_runs_index.py gh-pages allure-report site
+        run: |
+          python3 scripts/allure_runs_index.py gh-pages report site allure-results
+          # Persist the cumulative trend history at the site root for the next run.
+          cp history.jsonl site/history.jsonl
 
       # The gh-pages branch is kept purely as the persistent state store that the
       # next run reads previous archives + history from. It is NOT the Pages source

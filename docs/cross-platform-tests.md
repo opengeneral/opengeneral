@@ -59,19 +59,20 @@ without gating the workflow.
 
 ### `report` (Allure -> GitHub Pages)
 `if: always()`, so it reports even when tests fail. Each test job emits Allure
-results (`allure-pytest`). The conftest in `tests/` labels every test on two axes:
-the **Behaviors** tab groups by product domain (Epic) / component (Feature) — what
-is tested — and the **Suites** tab groups by tier (Unit / Binary usage /
-Installer) / component — how it runs. Tests are also tagged by tier and OS, with
-the OS recorded as a parameter so history is tracked per platform. This job:
+results (`allure-pytest`, the Allure 2 result format, which **Allure 3** reads).
+The conftest in `tests/` labels every test so the report's tree groups by product
+domain (Epic) / component (Feature) — what is tested — via the Allure 3 `awesome`
+report's `groupBy` (see [`allurerc.mjs`](../allurerc.mjs)). Tests are also tagged
+by tier and OS, with the OS recorded as a parameter so history is kept per
+platform. This job:
 1. downloads every job's `allure-results-*`,
-2. seeds `history/` from the latest archived run (trend continuity),
-3. writes `environment.properties` + `executor.json` so the report shows the
-   commit / ref / trigger and links to the GitHub run,
-4. runs `allure generate`,
+2. installs the Allure 3 CLI (`npm install -g allure`),
+3. restores the cumulative `history.jsonl` from `gh-pages` (trend continuity),
+4. runs `allure generate` (config in `allurerc.mjs`),
 5. runs `scripts/allure_runs_index.py` to **archive this run's report under
    `runs/<run-number>/`, render a root `index.html` table of all runs, and prune**
-   (keep every `v*` release run + the last 10 dispatch runs),
+   (keep every `v*` release run + the last 10 dispatch runs) — run stats are
+   counted straight from the results, so they're report-format independent,
 6. deploys the site to GitHub Pages (full replace, so pruned runs drop off).
 
 The GitHub Pages root is a **table of test runs** — run number, date, ref/tag,
