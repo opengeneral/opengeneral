@@ -59,15 +59,23 @@ without gating the workflow.
 
 ### `report` (Allure -> GitHub Pages)
 `if: always()`, so it reports even when tests fail. Each test job emits Allure
-results (`allure-pytest`, tagged with an `os` parameter so history is tracked per
-platform) and uploads them as artifacts. This job:
+results (`allure-pytest`; the conftest in `tests/` tags each test with an Epic
+(tier) / Feature (component) so the Behaviors tab is a tidy tree, plus an `os`
+parameter so history is tracked per platform). This job:
 1. downloads every job's `allure-results-*`,
-2. restores the previous report's `history/` from the `gh-pages` branch (trends),
-3. runs `allure generate`,
-4. deploys the HTML report to GitHub Pages.
+2. seeds `history/` from the latest archived run (trend continuity),
+3. writes `environment.properties` + `executor.json` so the report shows the
+   commit / ref / trigger and links to the GitHub run,
+4. runs `allure generate`,
+5. runs `scripts/allure_runs_index.py` to **archive this run's report under
+   `runs/<run-number>/`, render a root `index.html` table of all runs, and prune**
+   (keep every `v*` release run + the last 10 dispatch runs),
+6. deploys the site to GitHub Pages (full replace, so pruned runs drop off).
 
-The result is a browsable report at the repo's GitHub Pages URL that accumulates
-pass/fail/flaky history across runs.
+The GitHub Pages root is a **table of test runs** — run number, date, ref/tag,
+commit, trigger, passed/failed/skipped counts, and links to each run's full Allure
+report and its GitHub Actions run. Click any row to open that run's report; the
+trend/history charts live inside each report.
 
 ## Running the tiers locally
 
