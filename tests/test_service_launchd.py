@@ -6,6 +6,12 @@ from pathlib import Path
 
 import pytest
 
+# The launchd backend builds its service target from os.getuid(), which does not
+# exist on Windows — skip the whole module there.
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32", reason="launchd / os.getuid() is Unix-only"
+)
+
 from opengeneral import service_launchd
 
 

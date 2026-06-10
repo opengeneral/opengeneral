@@ -1,5 +1,6 @@
-#!/usr/bin/env bash
-# OpenGeneral installer for Linux and macOS.
+#!/bin/sh
+# OpenGeneral installer for Linux and macOS. POSIX sh — safe to `curl ... | sh`
+# (Debian/Ubuntu /bin/sh is dash, so no bashisms here).
 #
 #   curl -LsSf https://raw.githubusercontent.com/opengeneral/opengeneral/main/install.sh | sh
 #
@@ -10,7 +11,7 @@
 #   --version=vX.Y.Z install a specific release instead of the latest
 #
 # Env overrides: INSTALL_DIR, OPENGENERAL_REPO, OPENGENERAL_VERSION.
-set -euo pipefail
+set -eu
 
 REPO="${OPENGENERAL_REPO:-opengeneral/opengeneral}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
@@ -27,9 +28,9 @@ for arg in "$@"; do
   esac
 done
 
-if [[ "$DO_UNINSTALL" -eq 1 ]]; then
+if [ "$DO_UNINSTALL" -eq 1 ]; then
   bin="$INSTALL_DIR/opengeneral"
-  if [[ -x "$bin" ]]; then
+  if [ -x "$bin" ]; then
     "$bin" daemon uninstall || echo "Note: 'daemon uninstall' reported an issue; continuing."
     rm -f "$bin"
     echo "Removed $bin"
@@ -69,7 +70,7 @@ case "$target" in
 esac
 
 asset="opengeneral-${target}"
-if [[ "$VERSION" == "latest" ]]; then
+if [ "$VERSION" = "latest" ]; then
   base="https://github.com/$REPO/releases/latest/download"
 else
   base="https://github.com/$REPO/releases/download/$VERSION"
@@ -83,7 +84,7 @@ curl -fsSL "$base/$asset" -o "$tmp/opengeneral"
 curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS"
 
 expected="$(awk -v a="$asset" '$2 == a {print $1}' "$tmp/SHA256SUMS")"
-if [[ -z "$expected" ]]; then
+if [ -z "$expected" ]; then
   echo "Checksum for $asset not found in SHA256SUMS." >&2
   exit 1
 fi
@@ -92,7 +93,7 @@ if command -v sha256sum >/dev/null 2>&1; then
 else
   actual="$(shasum -a 256 "$tmp/opengeneral" | awk '{print $1}')"
 fi
-if [[ "$actual" != "$expected" ]]; then
+if [ "$actual" != "$expected" ]; then
   echo "Checksum mismatch for $asset:" >&2
   echo "  expected: $expected" >&2
   echo "  actual:   $actual" >&2
@@ -112,7 +113,7 @@ case ":$PATH:" in
     ;;
 esac
 
-if [[ "$WITH_SERVICE" -eq 1 ]]; then
+if [ "$WITH_SERVICE" -eq 1 ]; then
   echo
   echo "Registering the daemon service ..."
   "$INSTALL_DIR/opengeneral" daemon install

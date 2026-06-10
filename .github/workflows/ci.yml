@@ -1,0 +1,137 @@
+name: ci
+
+# Unit tests, a built-binary integration suite, installer tests, and a best-effort
+# real service-manager lifecycle — across Linux, macOS, and Windows.
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: unit (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e '.[dev]'
+      - name: Run unit tests
+        run: python -m pytest -q tests
+
+  build-and-integration:
+    name: build+integration (${{ matrix.os }})
+    needs: unit
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e '.[build,dev]'
+
+      - name: Build binary (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          PYTHON: python
+        run: ./packaging/build.sh
+
+      - name: Build binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./packaging/build.ps1
+
+      - name: Integration tests
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            export OPENGENERAL_BINARY="$PWD/dist/opengeneral.exe"
+          else
+            export OPENGENERAL_BINARY="$PWD/dist/opengeneral"
+          fi
+          python -m pytest -q tests/integration
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}
+          path: dist/opengeneral*
+          if-no-files-found: error
+
+  installer:
+    name: installer (${{ matrix.os }})
+    needs: build-and-integration
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}
+          path: dist
+
+      - name: Installer test (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          chmod +x dist/opengeneral
+          OPENGENERAL_BINARY="$PWD/dist/opengeneral" bash tests/installer/run_install_sh.sh
+
+      - name: Installer test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OPENGENERAL_BINARY = "$PWD\dist\opengeneral.exe"
+          ./tests/installer/run_install.ps1
+
+  service-lifecycle:
+    name: service-lifecycle (${{ matrix.os }})
+    needs: build-and-integration
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}
+          path: bin
+
+      - name: Enable systemd user session (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          loginctl enable-linger "$USER" || true
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+
+      - name: Real daemon lifecycle
+        shell: bash
+        run: |
+          set -x
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            BIN="$PWD/bin/opengeneral.exe"
+          else
+            BIN="$PWD/bin/opengeneral"
+            chmod +x "$BIN"
+          fi
+          export OPENGENERAL_HOME="$RUNNER_TEMP/oghome"
+          "$BIN" daemon install
+          "$BIN" daemon start
+          "$BIN" daemon status
+          "$BIN" daemon stop
+          "$BIN" daemon uninstall
