@@ -20,9 +20,14 @@ def _scripted_systemctl(
     monkeypatch: pytest.MonkeyPatch, script: dict[str, tuple[int, str]] | None = None
 ) -> list[list[str]]:
     """Patch subprocess.run with a scripted systemctl that picks a (returncode, stdout)
-    keyed on the subcommand verb (`systemctl --user <verb> ...`)."""
+    keyed on the subcommand verb (`systemctl --user <verb> ...`). Also stubs
+    shutil.which so the tests run on macOS/Windows hosts that have no systemctl."""
     calls: list[list[str]] = []
     plan = script or {}
+
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/systemctl" if name == "systemctl" else None
+    )
 
     def _run(cmd, capture_output, text, check):  # noqa: ANN001
         calls.append(list(cmd))
