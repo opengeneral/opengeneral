@@ -8,7 +8,8 @@ service-coupled -Uninstall path is exercised by the service-lifecycle CI job.
 #>
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+# $PSScriptRoot is tests/installer; the repo root is two levels up.
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $installPs1 = Join-Path $repoRoot 'install.ps1'
 
 $srcBin = $env:OPENGENERAL_BINARY
