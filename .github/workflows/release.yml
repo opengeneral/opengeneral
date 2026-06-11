@@ -72,12 +72,14 @@ jobs:
           mkdir -p release-assets
           cp dist/opengeneral "release-assets/opengeneral-${{ matrix.target }}"
 
-      - name: Stage binary (Windows)
+      - name: Stage binaries (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force release-assets | Out-Null
           Copy-Item dist/opengeneral.exe "release-assets/opengeneral-${{ matrix.target }}.exe"
+          # The SCM service host ships alongside the main binary (Windows only).
+          Copy-Item dist/opengeneral-svc.exe "release-assets/opengeneral-svc-${{ matrix.target }}.exe"
 
       - uses: actions/upload-artifact@v4
         with:

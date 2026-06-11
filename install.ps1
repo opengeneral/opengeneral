@@ -7,10 +7,11 @@ Run via:
 
   irm https://raw.githubusercontent.com/opengeneral/opengeneral/main/install.ps1 | iex
 
-Downloads the prebuilt windows-x86_64 binary from the latest GitHub Release,
-verifies its checksum, and installs it to %LOCALAPPDATA%\Programs\OpenGeneral on
-the per-user PATH. Registering the daemon (-WithService) needs Administrator
-rights; the script triggers a UAC prompt for just that step.
+Downloads the prebuilt windows-x86_64 binaries from the latest GitHub Release
+(opengeneral.exe plus opengeneral-svc.exe, the SCM service host), verifies their
+checksums, and installs them to %LOCALAPPDATA%\Programs\OpenGeneral on the per-user
+PATH. Registering the daemon (-WithService) needs Administrator rights; the script
+triggers a UAC prompt for just that step.
 
 Parameters: -WithService, -Uninstall, -Version vX.Y.Z.
 Env overrides: INSTALL_DIR, OPENGENERAL_REPO, OPENGENERAL_VERSION.
@@ -27,6 +28,8 @@ $Repo = if ($env:OPENGENERAL_REPO) { $env:OPENGENERAL_REPO } else { 'opengeneral
 $InstallDir = if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs\OpenGeneral' }
 $target = 'windows-x86_64'
 $asset = "opengeneral-$target.exe"
+# The SCM service host ships alongside the main binary; both install together.
+$svcAsset = "opengeneral-svc-$target.exe"
 
 function Test-IsAdmin {
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -74,6 +77,7 @@ function Remove-FromUserPath {
 
 if ($Uninstall) {
   $bin = Join-Path $InstallDir 'opengeneral.exe'
+  $svcBin = Join-Path $InstallDir 'opengeneral-svc.exe'
   if (Test-Path $bin) {
     $rc = Invoke-ServiceCommand -Binary $bin -Action @('daemon', 'uninstall')
     if ($rc -ne 0) {
@@ -81,6 +85,7 @@ if ($Uninstall) {
       exit 1
     }
     Remove-Item -Force $bin
+    if (Test-Path $svcBin) { Remove-Item -Force $svcBin }
     Remove-FromUserPath -Dir $InstallDir
     Write-Host "Removed $bin"
   }
@@ -101,22 +106,29 @@ else {
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("opengeneral-install-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 try {
-  Write-Host "Downloading $asset ($Version) ..."
-  Invoke-WebRequest -Uri "$base/$asset" -OutFile (Join-Path $tmp 'opengeneral.exe')
+  Write-Host "Downloading opengeneral ($Version) ..."
   Invoke-WebRequest -Uri "$base/SHA256SUMS" -OutFile (Join-Path $tmp 'SHA256SUMS')
+  $sums = Get-Content (Join-Path $tmp 'SHA256SUMS')
 
-  $line = Get-Content (Join-Path $tmp 'SHA256SUMS') | Where-Object { ($_ -split '\s+')[1] -eq $asset } | Select-Object -First 1
-  if (-not $line) { Write-Error "Checksum for $asset not found in SHA256SUMS"; exit 1 }
-  $expected = (($line -split '\s+')[0]).ToLower()
-  $actual = (Get-FileHash (Join-Path $tmp 'opengeneral.exe') -Algorithm SHA256).Hash.ToLower()
-  if ($actual -ne $expected) {
-    Write-Error "Checksum mismatch for $asset (expected $expected, got $actual)"
-    exit 1
+  function Install-VerifiedAsset {
+    param([string]$AssetName, [string]$DestName)
+    $download = Join-Path $tmp $AssetName
+    Invoke-WebRequest -Uri "$base/$AssetName" -OutFile $download
+    $line = $sums | Where-Object { ($_ -split '\s+')[1] -eq $AssetName } | Select-Object -First 1
+    if (-not $line) { Write-Error "Checksum for $AssetName not found in SHA256SUMS"; exit 1 }
+    $expected = (($line -split '\s+')[0]).ToLower()
+    $actual = (Get-FileHash $download -Algorithm SHA256).Hash.ToLower()
+    if ($actual -ne $expected) {
+      Write-Error "Checksum mismatch for $AssetName (expected $expected, got $actual)"
+      exit 1
+    }
+    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+    Copy-Item -Force $download (Join-Path $InstallDir $DestName)
   }
 
-  New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+  Install-VerifiedAsset $asset 'opengeneral.exe'
+  Install-VerifiedAsset $svcAsset 'opengeneral-svc.exe'
   $dest = Join-Path $InstallDir 'opengeneral.exe'
-  Copy-Item -Force (Join-Path $tmp 'opengeneral.exe') $dest
   Write-Host "Installed opengeneral to $dest"
 }
 finally {

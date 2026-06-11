@@ -142,9 +142,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Machine-wide dir so the SCM service (LocalSystem) can read the host exe.
-          # Both binaries ship together: opengeneral.exe + the service host.
-          $dir = "$env:ProgramData\OpenGeneral"
+          # The same per-user dir install.ps1 uses, so we verify the SCM service
+          # (LocalSystem) can actually read the host exe there — SYSTEM has access to
+          # user profiles by default. Both binaries ship together.
+          $dir = "$env:LOCALAPPDATA\Programs\OpenGeneral"
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
           Copy-Item dist\opengeneral*.exe $dir -Force
           Add-Content -Path $env:GITHUB_PATH -Value $dir
