@@ -1,0 +1,1 @@
+{"id":"762ce086007c690da8c8b671e852e108","fullName":"tests.test_service_systemd#test_uninstall_warns_on_real_disable_failure","name":"test_uninstall_warns_on_real_disable_failure","status":"passed","testResultsByEnv":{"default":"55a6603708a52f8cae99124e6e9abf18"}}
