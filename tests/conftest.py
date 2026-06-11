@@ -89,9 +89,10 @@ def _tier_for(parts: tuple[str, ...]) -> str:
 
 @pytest.fixture(autouse=True)
 def _allure_metadata(request: pytest.FixtureRequest) -> None:
-    # Two complementary lenses:
-    #   Behaviors tab -> product domain (epic) / component (feature): what is tested.
-    #   Suites tab    -> tier (parentSuite) / component (suite): how it runs.
+    # Both report trees lead with the OS, so per-platform results (especially skips
+    # and xfails that differ by OS) read at a glance:
+    #   Behaviors tab -> OS / product domain (epic) / component (feature): what is tested.
+    #   Suites tab    -> OS / tier / component: how it runs.
     # Plus tags (tier, OS) for filtering and an `os` parameter so history is kept
     # per platform. No-op without allure-pytest / --alluredir.
     if not _HAS_ALLURE:
@@ -103,10 +104,12 @@ def _allure_metadata(request: pytest.FixtureRequest) -> None:
     epic, feature = _DOMAIN.get(key, ("Other", key.replace("_", " ").capitalize()))
     os_name = platform.system()
     try:
+        allure.dynamic.label("os", os_name)  # top-level grouping in the Behaviors tree
         allure.dynamic.epic(epic)
         allure.dynamic.feature(feature)
-        allure.dynamic.label("parentSuite", tier)
-        allure.dynamic.label("suite", feature)
+        allure.dynamic.label("parentSuite", os_name)  # Suites tree: OS / tier / component
+        allure.dynamic.label("suite", tier)
+        allure.dynamic.label("subSuite", feature)
         allure.dynamic.tag(tier.lower().replace(" ", "-"))
         allure.dynamic.tag(os_name.lower())
         allure.dynamic.parameter("os", os_name)

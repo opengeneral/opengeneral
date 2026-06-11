@@ -20,8 +20,9 @@ export default {
       options: {
         reportName: "OpenGeneral cross-platform tests",
         logo,
-        // Group the test tree by product domain (epic) then component (feature).
-        groupBy: ["epic", "feature"],
+        // Lead the tree with the OS so per-platform results read at a glance, then
+        // product domain (epic) then component (feature).
+        groupBy: ["os", "epic", "feature"],
         theme: "auto",
       },
     },
