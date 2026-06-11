@@ -119,19 +119,30 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         item.add_marker(allure.label("subSuite", feature))
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    # Set the `os` parameter before skipif markers fire (tryfirst, ahead of the
+    # skipping plugin), so a test skipped on several OSes stays distinct per OS — the
+    # parameter feeds Allure's historyId, otherwise same-named skips merge into one leaf.
+    if not _HAS_ALLURE:
+        return
+    try:
+        allure.dynamic.parameter("os", _OS_NAME)
+    except Exception:
+        pass
+
+
 @pytest.fixture(autouse=True)
 def _allure_metadata(request: pytest.FixtureRequest) -> None:
-    # Tags (tier, OS) for filtering and an `os` parameter so history is kept per
-    # platform — these enrich tests that actually run; the OS/domain *grouping* is set
-    # for every test (run or not) in pytest_collection_modifyitems above. No-op
-    # without allure-pytest / --alluredir.
+    # Tags (tier, OS) for filtering; the `os` parameter is set in pytest_runtest_setup
+    # so it applies even to skipif-skipped tests, and the OS/domain *grouping* is set
+    # for every test in pytest_collection_modifyitems. No-op without allure-pytest.
     if not _HAS_ALLURE:
         return
     tier, _epic, _feature = _grouping_for(request.path)
     try:
         allure.dynamic.tag(tier.lower().replace(" ", "-"))
         allure.dynamic.tag(_OS_NAME.lower())
-        allure.dynamic.parameter("os", _OS_NAME)
     except Exception:
         pass
 
