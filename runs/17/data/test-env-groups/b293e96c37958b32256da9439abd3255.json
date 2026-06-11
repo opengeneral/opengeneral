@@ -1,0 +1,1 @@
+{"id":"b293e96c37958b32256da9439abd3255","fullName":"tests.test_service_systemd#test_daemon_command_uses_subcommand_form_when_frozen","name":"test_daemon_command_uses_subcommand_form_when_frozen","status":"passed","testResultsByEnv":{"default":"86004644e6bdc1a1ff3adfbe2fca6e8d"}}
