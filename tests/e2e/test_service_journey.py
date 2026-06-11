@@ -33,6 +33,23 @@ def test_service_lists_no_agents(service) -> None:
     assert resp["result"] == []
 
 
+def test_keys_are_managed_by_the_service(service) -> None:
+    # The point of daemon-owned keys: the service daemon stores the secret under its
+    # OWN account, so this works even when the service runs as a system account (the
+    # Windows LocalSystem keyring gap). Add a key with a secret via the daemon, then
+    # confirm the CLI sees it back through the same daemon.
+    added = service.rpc(
+        "keys.add", {"name": "svc-managed", "type": "anthropic", "secret": "sk-test-secret"}
+    )
+    assert added["ok"] is True, added
+    try:
+        listed = service.cli("keys", "list")
+        assert listed.returncode == 0, listed.stdout + listed.stderr
+        assert "svc-managed" in listed.stdout
+    finally:
+        service.rpc("keys.remove", {"name": "svc-managed"})
+
+
 @pytest.mark.xfail(reason=BUNDLING_GAP, strict=False)
 def test_spawn_and_talk_via_service(service) -> None:
     # Keys + action planes are daemon-owned; register them through the service daemon
