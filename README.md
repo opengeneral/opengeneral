@@ -97,7 +97,7 @@ Pushing a `v*` tag (e.g. `v0.1.0`) runs `.github/workflows/release.yml`, which r
 
 ### GitHub Actions workflows
 
-- [`docs/cross-platform-tests.md`](docs/cross-platform-tests.md) — the cross-platform test workflow: unit, built-binary integration, and installer tests across Linux/macOS/Windows, with an Allure history report published to GitHub Pages. Runs on a `v*` tag or manual dispatch.
+- [`docs/cross-platform-tests.md`](docs/cross-platform-tests.md) — the cross-platform test workflow. Mirrors the end-user journey across Linux/macOS/Windows: unit (mocked source) → build (artifact) → e2e (install the artifact, register + start the OS service, exercise the installed binary against the service-managed daemon, uninstall), with an Allure history report published to GitHub Pages. Runs on a `v*` tag or manual dispatch.
 - [`docs/release.md`](docs/release.md) — the release workflow: per-platform binary builds published to GitHub Releases on a `v*` tag.
 
 ## Usage guide

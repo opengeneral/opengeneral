@@ -1,10 +1,12 @@
 """Integration fixtures that drive the built `opengeneral` binary as a black box.
 
-Set OPENGENERAL_BINARY to the binary path (e.g. dist/opengeneral) to run these;
-otherwise they skip. Each test gets an isolated OPENGENERAL_HOME and a free daemon
-port, and the binary runs with cwd set to a scratch dir — important, because the
-default personas/skills are loaded via a relative `Path("personas")`, so running
-from the repo root would mask the (intentional, documented) bundling gap.
+The binary is resolved by the shared `binary` fixture (tests/conftest.py): it uses
+$OPENGENERAL_BINARY, else the default build output dist/opengeneral[.exe], and skips
+when neither exists. So `./packaging/build.sh && pytest` runs these automatically.
+Each test gets an isolated OPENGENERAL_HOME and a free daemon port, and the binary
+runs with cwd set to a scratch dir — important, because the default personas/skills
+are loaded via a relative `Path("personas")`, so running from the repo root would
+mask the (intentional, documented) bundling gap.
 """
 
 from __future__ import annotations
@@ -35,16 +37,6 @@ def _rpc(host: str, port: int, method: str, timeout: float = 3.0) -> dict:
         client.sendall(json.dumps(request).encode("utf-8") + b"\n")
         line = client.makefile("rb").readline()
     return json.loads(line.decode("utf-8"))
-
-
-@pytest.fixture(scope="session")
-def binary() -> str:
-    path = os.environ.get("OPENGENERAL_BINARY")
-    if not path:
-        pytest.skip("set OPENGENERAL_BINARY to the built binary to run integration tests")
-    if not Path(path).exists():
-        pytest.skip(f"OPENGENERAL_BINARY does not exist: {path}")
-    return str(Path(path).resolve())
 
 
 @pytest.fixture

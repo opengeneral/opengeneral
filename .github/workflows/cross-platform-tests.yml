@@ -3,9 +3,13 @@ name: cross-platform-tests
 # Verifies installation and usage across Linux, macOS, and Windows, and publishes
 # an Allure report (with run-over-run history) to GitHub Pages.
 #
+# Mirrors the end-user journey: unit (mocked source) -> build (artifact) ->
+# e2e (install the artifact the way a user does, register + start the OS service,
+# exercise the installed binary against the service-managed daemon, uninstall).
+#
 # Runs only when explicitly requested (workflow_dispatch) or when a release tag is
 # pushed — not on every push, so doc/config-only changes don't trigger the heavy
-# 3-OS build matrix.
+# 3-OS matrix.
 on:
   workflow_dispatch:
   push:
@@ -30,7 +34,7 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -e '.[dev]'
       - name: Run unit tests
-        run: python -m pytest tests --ignore=tests/integration --ignore=tests/installer --alluredir=allure-results
+        run: python -m pytest tests --ignore=tests/integration --ignore=tests/installer --ignore=tests/e2e --alluredir=allure-results
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -39,7 +43,7 @@ jobs:
           if-no-files-found: ignore
 
   build:
-    name: build+binary-tests (${{ matrix.os }})
+    name: build (${{ matrix.os }})
     needs: unit
     runs-on: ${{ matrix.os }}
     strategy:
@@ -51,87 +55,137 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install -e '.[build,dev]'
-
+      - run: python -m pip install -e '.[build]'
       - name: Build binary (Unix)
         if: runner.os != 'Windows'
         shell: bash
         env:
           PYTHON: python
         run: ./packaging/build.sh
-
       - name: Build binary (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./packaging/build.ps1
-
-      - name: Integration + installer tests
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            export OPENGENERAL_BINARY="$PWD/dist/opengeneral.exe"
-          else
-            export OPENGENERAL_BINARY="$PWD/dist/opengeneral"
-          fi
-          python -m pytest tests/integration tests/installer --alluredir=allure-results
-
-      - uses: actions/upload-artifact@v4
-        if: always()
+      # The built binary is the only artifact the e2e job consumes. Testing it on a
+      # fresh runner — without the build toolchain, source tree, or dev deps — is the
+      # whole point: it catches "works in the build env, breaks once installed" bugs.
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: allure-results-binary-${{ matrix.os }}
-          path: allure-results
-          if-no-files-found: ignore
+          name: binary-${{ matrix.os }}
+          path: dist/opengeneral*
+          if-no-files-found: error
 
-  service-lifecycle:
-    name: service-lifecycle (${{ matrix.os }})
+  e2e:
+    name: e2e (${{ matrix.os }})
     needs: build
-    continue-on-error: true
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-14, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # test code + installer scripts (not the package)
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install -e '.[build,dev]'
-      - name: Build binary (Unix)
-        if: runner.os != 'Windows'
-        shell: bash
-        env:
-          PYTHON: python
-        run: ./packaging/build.sh
-      - name: Build binary (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./packaging/build.ps1
+      - name: Download the built binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}
+          path: dist
+      # Only the test runner — deliberately NOT `pip install -e .`, so the installed
+      # binary is exercised in an environment without its own source or deps.
+      - name: Install test runner only
+        run: python -m pip install pytest allure-pytest keyring
+
       - name: Enable systemd user session (Linux)
         if: runner.os == 'Linux'
         run: |
           loginctl enable-linger "$USER" || true
           echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
-      - name: Real daemon lifecycle
+
+      # Install the binary the way a user does — through the real install.sh, fed an
+      # offline fake release built from the artifact (install.sh pulls from Releases
+      # `latest`, which wouldn't match this commit). This is the "install script" stage.
+      - name: Install via install.sh (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          set -x
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            BIN="$PWD/dist/opengeneral.exe"
-          else
-            BIN="$PWD/dist/opengeneral"
-            chmod +x "$BIN"
+          set -eu
+          chmod +x dist/opengeneral
+          case "$RUNNER_OS" in
+            Linux) target=linux-x86_64 ;;
+            macOS) target=macos-arm64 ;;
+          esac
+          export FAKE_REL="$RUNNER_TEMP/fake-release"
+          mkdir -p "$FAKE_REL"
+          cp dist/opengeneral "$FAKE_REL/opengeneral-$target"
+          ( cd "$FAKE_REL" && { command -v sha256sum >/dev/null 2>&1 \
+              && sha256sum "opengeneral-$target" \
+              || shasum -a 256 "opengeneral-$target"; } > SHA256SUMS )
+          STUB="$RUNNER_TEMP/stub"; mkdir -p "$STUB"
+          {
+            echo '#!/usr/bin/env bash'
+            echo 'out=""; url=""'
+            echo 'while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift 2 ;; -*) shift ;; *) url="$1"; shift ;; esac; done'
+            echo 'cp "$FAKE_REL/$(basename "$url")" "$out"'
+          } > "$STUB/curl"
+          chmod +x "$STUB/curl"
+          export PATH="$STUB:$PATH"
+          export INSTALL_DIR="$HOME/.local/bin"
+          sh ./install.sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "OPENGENERAL_BINARY=$HOME/.local/bin/opengeneral" >> "$GITHUB_ENV"
+
+      - name: Install binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dir = "$env:LOCALAPPDATA\Programs\OpenGeneral"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item dist\opengeneral.exe "$dir\opengeneral.exe" -Force
+          Add-Content -Path $env:GITHUB_PATH -Value $dir
+          Add-Content -Path $env:GITHUB_ENV -Value "OPENGENERAL_BINARY=$dir\opengeneral.exe"
+
+      # Secondary, service-less path: foreground daemon (the --no-service / tech-user
+      # case) + installer-correctness (checksum reject, uninstall). No OS service here,
+      # so this runs first and can't disturb the e2e service started below.
+      - name: Binary + installer suites (no service)
+        shell: bash
+        run: python -m pytest tests/integration tests/installer --alluredir=allure-results
+
+      # Primary path: the OS-managed service. install + start the real service, then
+      # spawn/talk against the service-managed daemon, then uninstall (fixture teardown).
+      # Windows service steps are a documented known-failure (xfail) until a one-file
+      # binary can host the pywin32 SCM service.
+      - name: Service journey (installed service)
+        shell: bash
+        env:
+          OPENGENERAL_E2E: "1"
+        run: python -m pytest tests/e2e --alluredir=allure-results
+
+      - name: Uninstall and verify removal (Unix)
+        if: always() && runner.os != 'Windows'
+        shell: bash
+        run: |
+          sh ./install.sh --uninstall || true
+          if [ -e "$HOME/.local/bin/opengeneral" ]; then
+            echo "binary still present after uninstall" >&2
+            exit 1
           fi
-          export OPENGENERAL_HOME="$RUNNER_TEMP/oghome"
-          "$BIN" daemon install
-          "$BIN" daemon start
-          "$BIN" daemon status
-          "$BIN" daemon stop
-          "$BIN" daemon uninstall
+          echo "uninstall removed the binary"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: allure-results-e2e-${{ matrix.os }}
+          path: allure-results
+          if-no-files-found: ignore
 
   report:
     name: report
-    needs: [unit, build]
+    needs: [unit, e2e]
     if: ${{ always() && github.repository == 'opengeneral/opengeneral' }}
     runs-on: ubuntu-latest
     permissions:

@@ -13,23 +13,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[2]
 
-pytestmark = pytest.mark.skipif(
-    "OPENGENERAL_BINARY" not in os.environ,
-    reason="set OPENGENERAL_BINARY to the built binary to run installer tests",
-)
 
-
-def test_installer_script() -> None:
+def test_installer_script(binary: str) -> None:
     if sys.platform == "win32":
         cmd = ["pwsh", "-File", str(ROOT / "tests" / "installer" / "run_install.ps1")]
     else:
         cmd = ["bash", str(ROOT / "tests" / "installer" / "run_install_sh.sh")]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    # The shared `binary` fixture resolves $OPENGENERAL_BINARY or the default build
+    # output; pass it through so the script installs the real product binary.
+    env = {**os.environ, "OPENGENERAL_BINARY": binary}
+    result = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
     print(result.stdout)
     if result.stderr:
         print(result.stderr, file=sys.stderr)

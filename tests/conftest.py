@@ -1,10 +1,39 @@
 from __future__ import annotations
 
+import os
 import platform
+import sys
+from pathlib import Path
 
 import keyring
 import keyring.backend
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+@pytest.fixture(scope="session")
+def binary() -> str:
+    """Resolve the OpenGeneral product binary for integration/installer tests.
+
+    Order: ``$OPENGENERAL_BINARY``, else the default build output
+    ``dist/opengeneral[.exe]``. Skips (not fails) when neither exists, so a plain
+    unit run is unaffected while ``./packaging/build.sh && pytest`` picks the freshly
+    built binary up automatically — no need to export OPENGENERAL_BINARY by hand.
+    """
+    env = os.environ.get("OPENGENERAL_BINARY")
+    if env:
+        if not Path(env).exists():
+            pytest.skip(f"OPENGENERAL_BINARY does not exist: {env}")
+        return str(Path(env).resolve())
+    name = "opengeneral.exe" if sys.platform == "win32" else "opengeneral"
+    dist = REPO_ROOT / "dist" / name
+    if dist.exists():
+        return str(dist.resolve())
+    pytest.skip(
+        "no opengeneral binary found — build it (./packaging/build.sh or make build), "
+        "or set OPENGENERAL_BINARY to a binary path"
+    )
 
 try:
     import allure
@@ -22,6 +51,7 @@ _DOMAIN: dict[str, tuple[str, str]] = {
     "daemon": ("Daemon & services", "Daemon core"),
     "daemon_client": ("Daemon & services", "Daemon RPC client"),
     "daemon_lifecycle": ("Daemon & services", "Daemon lifecycle"),
+    "service_journey": ("Daemon & services", "Service journey"),
     "service_systemd": ("Daemon & services", "systemd backend"),
     "service_launchd": ("Daemon & services", "launchd backend"),
     "service_windows": ("Daemon & services", "Windows SCM backend"),
@@ -48,6 +78,8 @@ _DOMAIN: dict[str, tuple[str, str]] = {
 
 
 def _tier_for(parts: tuple[str, ...]) -> str:
+    if "e2e" in parts:
+        return "Service journey"
     if "integration" in parts:
         return "Binary usage"
     if "installer" in parts:
