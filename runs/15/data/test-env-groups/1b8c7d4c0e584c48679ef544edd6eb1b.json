@@ -1,0 +1,1 @@
+{"id":"1b8c7d4c0e584c48679ef544edd6eb1b","fullName":"tests.test_service_systemd#test_status_normalizes_inactive_to_stopped","name":"test_status_normalizes_inactive_to_stopped","status":"passed","testResultsByEnv":{"default":"1c5e982ccdfd93ea3e7b42ddd06f6f1c"}}
