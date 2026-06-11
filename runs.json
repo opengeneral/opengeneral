@@ -78,5 +78,21 @@
     "failed": 0,
     "skipped": 29,
     "total": 243
+  },
+  {
+    "run": 10,
+    "run_id": "27316389352",
+    "date": "2026-06-11 01:00",
+    "ref": "main",
+    "commit": "19771079ec33a310a57d8485e7154c6493362e31",
+    "short_commit": "1977107",
+    "trigger": "workflow_dispatch",
+    "release": false,
+    "report": "runs/10/",
+    "ci_url": "https://github.com/opengeneral/opengeneral/actions/runs/27316389352",
+    "passed": 218,
+    "failed": 0,
+    "skipped": 34,
+    "total": 252
   }
 ]
