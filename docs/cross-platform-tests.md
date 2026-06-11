@@ -83,14 +83,17 @@ test runner** (`pytest allure-pytest keyring`) — deliberately *not* `pip insta
 Linux gets `loginctl enable-linger` + `XDG_RUNTIME_DIR` so the per-user systemd
 manager is reachable; macOS uses the runner's GUI session for launchd.
 
-**Known failures (documented, not hidden):**
-- **`spawn`/`talk`** are `xfail` on every OS — the binary loads default
-  personas/skills via a relative `Path("personas")` and bundles no data files, so an
-  installed binary finds no persona. They flip to pass once that bundling is fixed.
-- **The Windows service path** is `xfail` on Windows only — a one-file PyInstaller
-  binary can't host the pywin32 SCM service yet, so `daemon start` fails there. The
-  Windows *binary* install and installer-correctness tests stay blocking; only the
-  service steps are the expected failure, until the SCM hosting is fixed.
+The Windows SCM service is hosted by a second, tiny binary (`opengeneral-svc.exe`)
+that ships alongside `opengeneral.exe` — a one-file `opengeneral.exe` extracts too
+slowly to host the dispatcher within the SCM start timeout, so the small host hosts
+the service and supervises `opengeneral.exe daemon run` as a child. Secrets are stored
+by the daemon (OS keyring where available, else a `0600` file), so the service can use
+them even running as LocalSystem.
+
+**Known failure (documented, not hidden):** `spawn`/`talk` are `xfail` on every OS —
+the binary loads default personas/skills via a relative `Path("personas")` and bundles
+no data files, so an installed binary finds no persona. They flip to pass once that
+bundling is fixed.
 
 ### `report` (Allure -> GitHub Pages)
 `if: always()`, so it reports even when tests fail. Each test job emits Allure
