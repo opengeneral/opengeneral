@@ -20,6 +20,21 @@ def test_daemon_lists_no_agents(daemon) -> None:
     assert resp["result"] == []
 
 
+def test_action_planes_roundtrip_via_daemon(daemon, run) -> None:
+    added = run("action-planes", "add", "default", "--endpoint", "http://127.0.0.1:4767/mcp")
+    assert added.returncode == 0, added.stdout + added.stderr
+    listed = run("action-planes", "list")
+    assert listed.returncode == 0
+    assert "default" in listed.stdout
+    assert "http://127.0.0.1:4767/mcp" in listed.stdout
+
+
+def test_keys_list_empty_via_daemon(daemon, run) -> None:
+    result = run("keys", "list")
+    assert result.returncode == 0
+    assert "(none)" in result.stdout
+
+
 def test_daemon_stops_cleanly_via_rpc(daemon) -> None:
     code = daemon.stop()
     assert code == 0

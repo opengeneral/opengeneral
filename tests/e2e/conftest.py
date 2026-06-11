@@ -28,8 +28,8 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 4777
 
 
-def _rpc(method: str, timeout: float = 3.0) -> dict:
-    request = {"id": "e2e", "method": method, "params": {}}
+def _rpc(method: str, params: dict | None = None, timeout: float = 3.0) -> dict:
+    request = {"id": "e2e", "method": method, "params": params or {}}
     with socket.create_connection((DEFAULT_HOST, DEFAULT_PORT), timeout=timeout) as client:
         client.sendall(json.dumps(request).encode("utf-8") + b"\n")
         line = client.makefile("rb").readline()
@@ -42,8 +42,8 @@ class Service:
     host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
 
-    def rpc(self, method: str) -> dict:
-        return _rpc(method)
+    def rpc(self, method: str, params: dict | None = None) -> dict:
+        return _rpc(method, params)
 
     def cli(self, *args: str, stdin: str | None = None, timeout: int = 30) -> subprocess.CompletedProcess:
         return subprocess.run(

@@ -31,8 +31,8 @@ def _free_port() -> int:
     return port
 
 
-def _rpc(host: str, port: int, method: str, timeout: float = 3.0) -> dict:
-    request = {"id": "test", "method": method, "params": {}}
+def _rpc(host: str, port: int, method: str, params: dict | None = None, timeout: float = 3.0) -> dict:
+    request = {"id": "test", "method": method, "params": params or {}}
     with socket.create_connection((host, port), timeout=timeout) as client:
         client.sendall(json.dumps(request).encode("utf-8") + b"\n")
         line = client.makefile("rb").readline()
@@ -83,8 +83,8 @@ class RunningDaemon:
     host: str
     port: int
 
-    def rpc(self, method: str) -> dict:
-        return _rpc(self.host, self.port, method)
+    def rpc(self, method: str, params: dict | None = None) -> dict:
+        return _rpc(self.host, self.port, method, params)
 
     def stop(self) -> int | None:
         try:

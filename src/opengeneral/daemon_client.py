@@ -69,3 +69,30 @@ class DaemonClient:
             "agent.message",
             {"name": name, "content": content, "source": "chat"},
         )
+
+    def add_key(self, name: str, provider_type: str, base_url: str | None, secret: str) -> Any:
+        return self.request(
+            "keys.add",
+            {"name": name, "type": provider_type, "base_url": base_url, "secret": secret},
+        )
+
+    def list_keys(self) -> Any:
+        return self.request("keys.list")
+
+    def show_key(self, name: str) -> Any:
+        return self.request("keys.show", {"name": name})
+
+    def remove_key(self, name: str) -> Any:
+        return self.request("keys.remove", {"name": name})
+
+    def add_action_plane(self, name: str, endpoint: str) -> Any:
+        return self.request("action_planes.add", {"name": name, "endpoint": endpoint})
+
+    def list_action_planes(self) -> Any:
+        return self.request("action_planes.list")
+
+    def show_action_plane(self, name: str) -> Any:
+        return self.request("action_planes.show", {"name": name})
+
+    def remove_action_plane(self, name: str) -> Any:
+        return self.request("action_planes.remove", {"name": name})

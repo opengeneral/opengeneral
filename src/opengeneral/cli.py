@@ -9,20 +9,8 @@ import typer
 from typing_extensions import Annotated
 
 from opengeneral import service
-from opengeneral.config import (
-    DEFAULT_ACTION_PLANE,
-    DEFAULT_ACTION_PLANES_CONFIG_PATH,
-    DEFAULT_AGENTS_CONFIG_PATH,
-    DEFAULT_KEYS_CONFIG_PATH,
-    SUPPORTED_PROVIDER_TYPES,
-    ActionPlaneConfig,
-    ActionPlanesConfig,
-    AgentsConfig,
-    KeyConfig,
-    KeysConfig,
-)
+from opengeneral.config import DEFAULT_ACTION_PLANE, SUPPORTED_PROVIDER_TYPES
 from opengeneral.daemon_client import DAEMON_NOT_RUNNING, DaemonClient, DaemonUnavailableError
-from opengeneral.keyring_store import delete_secret, set_secret
 from opengeneral.personas import PersonaNotFoundError, PersonaRegistry
 from opengeneral.runner import AgentChatRunner
 
@@ -54,40 +42,35 @@ def choose_provider_type() -> str:
     raise ValueError(f"Unknown provider: {choice}")
 
 
-def choose_key(config: KeysConfig, provider_type: str) -> str:
-    candidates = config.for_provider(provider_type)
+def choose_key(client: DaemonClient, provider_type: str) -> str:
+    candidates = [key for key in client.list_keys() if key["type"] == provider_type]
     if candidates:
         typer.echo(f"Select an API key for {provider_type}:")
         for index, key in enumerate(candidates, 1):
-            typer.echo(f"  {index}. {key.name}")
+            typer.echo(f"  {index}. {key['name']}")
         typer.echo(f"  {len(candidates) + 1}. Add a new API key")
         choice = prompt("API key")
         if choice.isdigit():
             selected = int(choice)
             if 1 <= selected <= len(candidates):
-                return candidates[selected - 1].name
+                return candidates[selected - 1]["name"]
             if selected == len(candidates) + 1:
-                return add_key_interactively(config, provider_type)
-        if choice in config.keys and config.keys[choice].provider_type == provider_type:
+                return add_key_interactively(client, provider_type)
+        if any(key["name"] == choice for key in candidates):
             return choice
         raise ValueError(f"Unknown API key: {choice}")
-    return add_key_interactively(config, provider_type)
+    return add_key_interactively(client, provider_type)
 
 
-def add_key_interactively(config: KeysConfig, provider_type: str) -> str:
+def add_key_interactively(client: DaemonClient, provider_type: str) -> str:
     name = prompt("API key name")
     if not name:
         raise ValueError("API key name is required.")
-    if name in config.keys:
-        raise ValueError(f"API key already exists: {name}")
     secret = typer.prompt("API key secret", hide_input=True)
     if not secret:
         raise ValueError("API key secret is required.")
     base_url = prompt("Base URL (optional, blank for default)") or None
-    keys = dict(config.keys)
-    keys[name] = KeyConfig(name, provider_type, base_url)
-    KeysConfig(keys).write(DEFAULT_KEYS_CONFIG_PATH)
-    set_secret(name, secret)
+    client.add_key(name, provider_type, base_url, secret)
     return name
 
 
@@ -99,29 +82,23 @@ def start_agent(
     agent_name: str | None,
 ) -> str:
     persona = PersonaRegistry().load(persona_tag)
-    action_planes_config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
-    if action_plane not in action_planes_config.action_planes:
-        return f"Action plane not found: {action_plane}"
-
-    agents_config = AgentsConfig.from_path(DEFAULT_AGENTS_CONFIG_PATH)
     if agent_name is None:
         return f"Agent name is required. Use: opengeneral spawn --persona {persona.tag} --name <name>"
-    name = agent_name
-    if name in agents_config.agents:
-        return f"Agent already exists: {name}"
 
-    keys_config = KeysConfig.from_path(DEFAULT_KEYS_CONFIG_PATH)
+    # The daemon owns keys/action-planes/agents and validates them on spawn (raising
+    # "Action plane not found" / "Key not found" / "Agent already exists" as needed).
+    client = DaemonClient()
     if key is None:
         provider_type = choose_provider_type()
-        key = choose_key(keys_config, provider_type)
-    elif key not in keys_config.keys:
-        return f"API key not found: {key}"
+        key = choose_key(client, provider_type)
 
     model = model or prompt("Model")
     if not model:
         return "Model is required."
 
-    result = DaemonClient().spawn_agent(name, persona.tag, action_plane, key, model, create_agent_id(persona.tag))
+    result = client.spawn_agent(
+        agent_name, persona.tag, action_plane, key, model, create_agent_id(persona.tag)
+    )
     return (
         f"Spawned agent {result['name']} ({result['id']}) from persona "
         f"{result['persona']} via action plane {result['action_plane']} using key {result['key']}"
@@ -182,94 +159,58 @@ def render_persona(persona_tag: str) -> str:
 
 
 def render_action_planes() -> str:
-    config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
-    lines = [f"Action planes config: {DEFAULT_ACTION_PLANES_CONFIG_PATH}", "", "Action planes:"]
-    if not config.action_planes:
+    planes = DaemonClient().list_action_planes()
+    lines = ["Action planes:"]
+    if not planes:
         lines.append("  (none)")
-    for action_plane in config.action_planes.values():
-        lines.append(f"  {action_plane.name}  {action_plane.endpoint}")
+    for plane in planes:
+        lines.append(f"  {plane['name']}  {plane['endpoint']}")
     return "\n".join(lines)
 
 
 def show_action_plane(name: str) -> str:
-    config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
-    action_plane = config.action_planes.get(name)
-    if action_plane is None:
-        return f"Action plane not found: {name}"
-    return "\n".join(
-        [
-            f"Action plane: {action_plane.name}",
-            f"Endpoint: {action_plane.endpoint}",
-        ]
-    )
+    plane = DaemonClient().show_action_plane(name)
+    return "\n".join([f"Action plane: {plane['name']}", f"Endpoint: {plane['endpoint']}"])
 
 
 def add_action_plane(name: str, endpoint: str) -> str:
-    config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
-    action_planes = dict(config.action_planes)
-    action_planes[name] = ActionPlaneConfig(name, endpoint)
-    ActionPlanesConfig(action_planes=action_planes).write(DEFAULT_ACTION_PLANES_CONFIG_PATH)
-    return f"Added action plane {name} to {DEFAULT_ACTION_PLANES_CONFIG_PATH}"
+    plane = DaemonClient().add_action_plane(name, endpoint)
+    return f"Added action plane {plane['name']}"
 
 
 def remove_action_plane(name: str) -> str:
-    config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
-    if name not in config.action_planes:
-        return f"Action plane not found: {name}"
-    action_planes = dict(config.action_planes)
-    del action_planes[name]
-    ActionPlanesConfig(action_planes=action_planes).write(DEFAULT_ACTION_PLANES_CONFIG_PATH)
-    return f"Removed action plane {name} from {DEFAULT_ACTION_PLANES_CONFIG_PATH}"
+    DaemonClient().remove_action_plane(name)
+    return f"Removed action plane {name}"
 
 
 def render_keys() -> str:
-    config = KeysConfig.from_path(DEFAULT_KEYS_CONFIG_PATH)
-    lines = [f"Keys config: {DEFAULT_KEYS_CONFIG_PATH}", "", "API keys:"]
-    if not config.keys:
+    keys = DaemonClient().list_keys()
+    lines = ["API keys:"]
+    if not keys:
         lines.append("  (none)")
-    for key in config.keys.values():
-        lines.append(f"  {key.name}  {key.provider_type}")
+    for key in keys:
+        lines.append(f"  {key['name']}  {key['type']}")
     return "\n".join(lines)
 
 
 def show_key(name: str) -> str:
-    config = KeysConfig.from_path(DEFAULT_KEYS_CONFIG_PATH)
-    key = config.keys.get(name)
-    if key is None:
-        return f"API key not found: {name}"
-    lines = [
-        f"API key: {key.name}",
-        f"Type: {key.provider_type}",
-    ]
-    if key.base_url is not None:
-        lines.append(f"Base URL: {key.base_url}")
+    key = DaemonClient().show_key(name)
+    lines = [f"API key: {key['name']}", f"Type: {key['type']}"]
+    if key.get("base_url") is not None:
+        lines.append(f"Base URL: {key['base_url']}")
     return "\n".join(lines)
 
 
 def add_key(name: str, provider_type: str, base_url: str | None) -> str:
-    if provider_type not in SUPPORTED_PROVIDER_TYPES:
-        return f"Unknown provider type: {provider_type}"
-    config = KeysConfig.from_path(DEFAULT_KEYS_CONFIG_PATH)
-    if name in config.keys:
-        return f"API key already exists: {name}"
     secret = typer.prompt("API key secret", hide_input=True)
     if not secret:
         return "API key secret is required."
-    keys = dict(config.keys)
-    keys[name] = KeyConfig(name, provider_type, base_url)
-    KeysConfig(keys=keys).write(DEFAULT_KEYS_CONFIG_PATH)
-    set_secret(name, secret)
-    return f"Added API key {name} ({provider_type})"
+    key = DaemonClient().add_key(name, provider_type, base_url, secret)
+    return f"Added API key {key['name']} ({key['type']})"
 
 
 def remove_key(name: str) -> str:
-    config = KeysConfig.from_path(DEFAULT_KEYS_CONFIG_PATH)
-    if name not in config.keys:
-        return f"API key not found: {name}"
-    keys = dict(config.keys)
-    del keys[name]
-    KeysConfig(keys=keys).write(DEFAULT_KEYS_CONFIG_PATH)
-    delete_secret(name)
+    DaemonClient().remove_key(name)
     return f"Removed API key {name}"
 
 

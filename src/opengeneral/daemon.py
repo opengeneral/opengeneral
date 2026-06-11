@@ -22,10 +22,11 @@ from opengeneral.config import (
     ActionPlanesConfig,
     AgentConfig,
     AgentsConfig,
+    KeyConfig,
     KeysConfig,
 )
 from opengeneral.daemon_client import DEFAULT_DAEMON_HOST, DEFAULT_DAEMON_PORT
-from opengeneral.keyring_store import get_secret
+from opengeneral.keyring_store import delete_secret, get_secret, set_secret
 from opengeneral.provider_factory import create_provider
 from opengeneral.providers import ChatProvider
 from opengeneral.personas import AgentPersona, PersonaRegistry
@@ -142,6 +143,79 @@ class AgentManager:
     def status(self) -> dict[str, Any]:
         return {"status": "running", "agents": len(self.agents)}
 
+    # --- Keys: daemon-owned so the secret is written and read by the same principal
+    # (the daemon). Metadata lives in keys.json; the secret in the daemon's keyring.
+    # Secrets are inbound-only — there is deliberately no "get secret" method.
+
+    def add_key(
+        self, name: str, provider_type: str, base_url: str | None, secret: str
+    ) -> dict[str, str | None]:
+        config = KeysConfig.from_path(DEFAULT_KEYS_CONFIG_PATH)
+        if name in config.keys:
+            raise ValueError(f"API key already exists: {name}")
+        keys = dict(config.keys)
+        keys[name] = KeyConfig(name, provider_type, base_url)
+        KeysConfig(keys=keys).write(DEFAULT_KEYS_CONFIG_PATH)
+        if provider_type != "static":
+            set_secret(name, secret)
+        return {"name": name, "type": provider_type, "base_url": base_url}
+
+    def list_keys(self) -> list[dict[str, str | None]]:
+        config = KeysConfig.from_path(DEFAULT_KEYS_CONFIG_PATH)
+        return [
+            {"name": key.name, "type": key.provider_type, "base_url": key.base_url}
+            for key in config.keys.values()
+        ]
+
+    def show_key(self, name: str) -> dict[str, str | None]:
+        config = KeysConfig.from_path(DEFAULT_KEYS_CONFIG_PATH)
+        key = config.keys.get(name)
+        if key is None:
+            raise ValueError(f"API key not found: {name}")
+        return {"name": key.name, "type": key.provider_type, "base_url": key.base_url}
+
+    def remove_key(self, name: str) -> dict[str, str]:
+        config = KeysConfig.from_path(DEFAULT_KEYS_CONFIG_PATH)
+        if name not in config.keys:
+            raise ValueError(f"API key not found: {name}")
+        keys = dict(config.keys)
+        del keys[name]
+        KeysConfig(keys=keys).write(DEFAULT_KEYS_CONFIG_PATH)
+        delete_secret(name)
+        return {"name": name}
+
+    # --- Action planes: daemon-owned (action-planes.json in the daemon's home).
+
+    def add_action_plane(self, name: str, endpoint: str) -> dict[str, str]:
+        config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
+        action_planes = dict(config.action_planes)
+        action_planes[name] = ActionPlaneConfig(name, endpoint)
+        ActionPlanesConfig(action_planes=action_planes).write(DEFAULT_ACTION_PLANES_CONFIG_PATH)
+        return {"name": name, "endpoint": endpoint}
+
+    def list_action_planes(self) -> list[dict[str, str]]:
+        config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
+        return [
+            {"name": plane.name, "endpoint": plane.endpoint}
+            for plane in config.action_planes.values()
+        ]
+
+    def show_action_plane(self, name: str) -> dict[str, str]:
+        config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
+        plane = config.action_planes.get(name)
+        if plane is None:
+            raise ValueError(f"Action plane not found: {name}")
+        return {"name": plane.name, "endpoint": plane.endpoint}
+
+    def remove_action_plane(self, name: str) -> dict[str, str]:
+        config = ActionPlanesConfig.from_path(DEFAULT_ACTION_PLANES_CONFIG_PATH)
+        if name not in config.action_planes:
+            raise ValueError(f"Action plane not found: {name}")
+        action_planes = dict(config.action_planes)
+        del action_planes[name]
+        ActionPlanesConfig(action_planes=action_planes).write(DEFAULT_ACTION_PLANES_CONFIG_PATH)
+        return {"name": name}
+
 
 class DaemonRequestHandler(socketserver.StreamRequestHandler):
     def handle(self) -> None:
@@ -225,6 +299,24 @@ class OpenGeneralDaemon(socketserver.ThreadingTCPServer):
             return self.manager.remove_agent(params["name"])
         if method == "agent.message":
             return asyncio.run(self.manager.send_message(params["name"], params["content"]))
+        if method == "keys.add":
+            return self.manager.add_key(
+                params["name"], params["type"], params.get("base_url"), params.get("secret", "")
+            )
+        if method == "keys.list":
+            return self.manager.list_keys()
+        if method == "keys.show":
+            return self.manager.show_key(params["name"])
+        if method == "keys.remove":
+            return self.manager.remove_key(params["name"])
+        if method == "action_planes.add":
+            return self.manager.add_action_plane(params["name"], params["endpoint"])
+        if method == "action_planes.list":
+            return self.manager.list_action_planes()
+        if method == "action_planes.show":
+            return self.manager.show_action_plane(params["name"])
+        if method == "action_planes.remove":
+            return self.manager.remove_action_plane(params["name"])
         raise ValueError(f"Unknown daemon method: {method}")
 
 def serve(host: str = DEFAULT_DAEMON_HOST, port: int = DEFAULT_DAEMON_PORT) -> int:

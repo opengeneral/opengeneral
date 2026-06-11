@@ -9,8 +9,6 @@ fails. The tests document that gap and will xpass once personas/skills are bundl
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
 BUNDLING_GAP = "binary does not bundle personas/skills (relative Path); fix deferred"
@@ -25,14 +23,14 @@ def test_personas_list_shows_defaults(run) -> None:
 
 
 @pytest.mark.xfail(reason=BUNDLING_GAP, strict=False)
-def test_static_spawn_and_talk(daemon, run, og_home) -> None:
-    # A "static" key needs no keyring secret and yields the StaticChatProvider.
-    (og_home / "keys.json").write_text(
-        json.dumps({"keys": {"static": {"type": "static"}}}), encoding="utf-8"
-    )
-    assert run(
-        "action-planes", "add", "default", "--endpoint", "http://127.0.0.1:4767/mcp"
-    ).returncode == 0
+def test_static_spawn_and_talk(daemon, run) -> None:
+    # A "static" key needs no keyring secret and yields the StaticChatProvider. Keys
+    # and action planes are daemon-owned, so register them through the daemon RPC
+    # (the CLI's `keys add` only exposes anthropic/openai).
+    assert daemon.rpc("keys.add", {"name": "static", "type": "static"})["ok"]
+    assert daemon.rpc(
+        "action_planes.add", {"name": "default", "endpoint": "http://127.0.0.1:4767/mcp"}
+    )["ok"]
 
     spawned = run(
         "spawn", "--persona", "coder", "--name", "s1", "--key", "static", "--model", "static/none"

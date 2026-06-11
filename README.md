@@ -112,45 +112,9 @@ You can also run without installing by setting `PYTHONPATH=src` in front of comm
 
 On Linux/macOS a `Makefile` wraps the common tasks — run `make help` to list them (`make dev`, `make test`, `make build`, `make install-bin`, `make clean`).
 
-### 2. Add an API key
+### 2. Install and start the daemon
 
-OpenGeneral stores user configuration and user-installed personas under:
-
-```text
-~/.opengeneral/keys.json
-~/.opengeneral/action-planes.json
-~/.opengeneral/agents.json
-~/.opengeneral/personas/*.json
-```
-
-API keys are stored as named entries. The metadata (name, provider type, optional base URL) lives in `keys.json`; the actual secret is stored in the OS keyring under the service `opengeneral`.
-
-```bash
-opengeneral keys add personal-anthropic --type anthropic
-# Prompts (hidden) for the API key secret and stores it in the OS keyring.
-```
-
-You can keep multiple keys per provider — pick distinct, readable names like `personal-anthropic` and `work-anthropic` so each agent can pick the right one.
-
-### 3. Configure an Action Plane
-
-Configure a default Action Plane endpoint:
-
-```bash
-opengeneral action-planes add default \
-  --endpoint http://127.0.0.1:4767/mcp
-```
-
-Or configure a remote Action Plane endpoint:
-
-```bash
-opengeneral action-planes add prod \
-  --endpoint https://action-plane.company.com/mcp
-```
-
-### 4. Install and start the daemon
-
-OpenGeneral runs as a managed OS service so the supervisor daemon survives terminals and reboots.
+The daemon owns all runtime state — agents, API keys, and Action Plane endpoints. Install and start it first; the `keys` and `action-planes` commands below are thin clients that talk to it.
 
 ```bash
 opengeneral daemon install
@@ -160,11 +124,11 @@ opengeneral daemon status
 
 - Linux: installs a per-user `systemd` unit at `~/.config/systemd/user/opengeneral.service`. Run `loginctl enable-linger $USER` once if you want the service to keep running after you log out.
 - macOS: installs a per-user `launchd` agent at `~/Library/LaunchAgents/com.opengeneral.daemon.plist`.
-- Windows: registers a Windows service via `pywin32`.
+- Windows: registers a Windows service — a tiny `opengeneral-svc.exe` hosts the SCM service and supervises the daemon process.
 
 The service's launch command is pinned at install time (the install output prints it). If that path changes — you rebuild the environment or move a packaged binary — re-run `opengeneral daemon install`.
 
-If the daemon fails to load persisted agents on startup it exits with code 78, and the service definition keeps it from respawning in a tight loop (`RestartPreventExitStatus=78` on systemd, `KeepAlive=Crashed` on launchd). Fix the underlying config (usually a missing keyring secret or a removed agent) and then `opengeneral daemon start`.
+If the daemon fails to load persisted agents on startup it exits with code 78, and the service definition keeps it from respawning in a tight loop (`RestartPreventExitStatus=78` on systemd, `KeepAlive=Crashed` on launchd). Fix the underlying config and then `opengeneral daemon start`.
 
 In a container or other environment without a supported service manager, run the daemon in the foreground instead:
 
@@ -172,7 +136,32 @@ In a container or other environment without a supported service manager, run the
 opengeneral daemon run
 ```
 
-OpenGeneral uses this single supervisor daemon to manage all running agents.
+### 3. Add an API key
+
+Keys are managed by the running daemon. The CLI sends the secret to the daemon, which stores the metadata (name, provider type, optional base URL) under its own config home and the secret in its OS keyring (service `opengeneral`). Storing and reading the secret in the same process is what lets the daemon use your key even when it runs as an OS service.
+
+```bash
+opengeneral keys add personal-anthropic --type anthropic
+# Prompts (hidden) for the API key secret and hands it to the daemon to store.
+```
+
+You can keep multiple keys per provider — pick distinct, readable names like `personal-anthropic` and `work-anthropic` so each agent can pick the right one.
+
+### 4. Configure an Action Plane
+
+Register a default Action Plane endpoint with the daemon:
+
+```bash
+opengeneral action-planes add default \
+  --endpoint http://127.0.0.1:4767/mcp
+```
+
+Or a remote Action Plane endpoint:
+
+```bash
+opengeneral action-planes add prod \
+  --endpoint https://action-plane.company.com/mcp
+```
 
 ### 5. Spawn an agent from a persona
 
