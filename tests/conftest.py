@@ -87,33 +87,51 @@ def _tier_for(parts: tuple[str, ...]) -> str:
     return "Unit"
 
 
-@pytest.fixture(autouse=True)
-def _allure_metadata(request: pytest.FixtureRequest) -> None:
-    # Both report trees lead with the OS, so per-platform results (especially skips
-    # and xfails that differ by OS) read at a glance:
-    #   Behaviors tab -> OS / product domain (epic) / component (feature): what is tested.
-    #   Suites tab    -> OS / tier / component: how it runs.
-    # Plus tags (tier, OS) for filtering and an `os` parameter so history is kept
-    # per platform. No-op without allure-pytest / --alluredir.
-    if not _HAS_ALLURE:
-        return
-    path = request.path
+# platform.system() returns "Darwin" on macOS; show the friendly name in the report.
+_OS_NAME = {"Darwin": "macOS"}.get(platform.system(), platform.system())
+
+
+def _grouping_for(path) -> tuple[str, str, str]:
     tier = _tier_for(path.parts)
     stem = path.stem
     key = stem[len("test_"):] if stem.startswith("test_") else stem
     epic, feature = _DOMAIN.get(key, ("Other", key.replace("_", " ").capitalize()))
-    # platform.system() returns "Darwin" on macOS; show the friendly name in the report.
-    os_name = {"Darwin": "macOS"}.get(platform.system(), platform.system())
+    return tier, epic, feature
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    # Assign the grouping labels at COLLECTION time (as markers), not from a runtime
+    # fixture — so a test still carries its OS/domain even when it never runs (a
+    # `skipif`-marked backend test, or an e2e test whose session fixture fails before
+    # any function fixture). Otherwise those land outside the OS folders in the report.
+    # Both report trees lead with the OS:
+    #   Behaviors tab -> OS / product domain (epic) / component (feature): what is tested.
+    #   Suites tab    -> OS / tier / component: how it runs.
+    if not _HAS_ALLURE:
+        return
+    for item in items:
+        tier, epic, feature = _grouping_for(item.path)
+        item.add_marker(allure.label("os", _OS_NAME))
+        item.add_marker(allure.epic(epic))
+        item.add_marker(allure.feature(feature))
+        item.add_marker(allure.label("parentSuite", _OS_NAME))
+        item.add_marker(allure.label("suite", tier))
+        item.add_marker(allure.label("subSuite", feature))
+
+
+@pytest.fixture(autouse=True)
+def _allure_metadata(request: pytest.FixtureRequest) -> None:
+    # Tags (tier, OS) for filtering and an `os` parameter so history is kept per
+    # platform — these enrich tests that actually run; the OS/domain *grouping* is set
+    # for every test (run or not) in pytest_collection_modifyitems above. No-op
+    # without allure-pytest / --alluredir.
+    if not _HAS_ALLURE:
+        return
+    tier, _epic, _feature = _grouping_for(request.path)
     try:
-        allure.dynamic.label("os", os_name)  # top-level grouping in the Behaviors tree
-        allure.dynamic.epic(epic)
-        allure.dynamic.feature(feature)
-        allure.dynamic.label("parentSuite", os_name)  # Suites tree: OS / tier / component
-        allure.dynamic.label("suite", tier)
-        allure.dynamic.label("subSuite", feature)
         allure.dynamic.tag(tier.lower().replace(" ", "-"))
-        allure.dynamic.tag(os_name.lower())
-        allure.dynamic.parameter("os", os_name)
+        allure.dynamic.tag(_OS_NAME.lower())
+        allure.dynamic.parameter("os", _OS_NAME)
     except Exception:
         pass
 
