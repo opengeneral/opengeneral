@@ -142,9 +142,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $dir = "$env:LOCALAPPDATA\Programs\OpenGeneral"
+          # Machine-wide dir so the SCM service (LocalSystem) can read the host exe.
+          # Both binaries ship together: opengeneral.exe + the service host.
+          $dir = "$env:ProgramData\OpenGeneral"
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          Copy-Item dist\opengeneral.exe "$dir\opengeneral.exe" -Force
+          Copy-Item dist\opengeneral*.exe $dir -Force
           Add-Content -Path $env:GITHUB_PATH -Value $dir
           Add-Content -Path $env:GITHUB_ENV -Value "OPENGENERAL_BINARY=$dir\opengeneral.exe"
 

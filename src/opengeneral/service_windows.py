@@ -5,6 +5,7 @@ import functools
 import sys
 import threading
 import traceback
+from pathlib import Path
 from typing import Callable, TypeVar
 
 from opengeneral.daemon_client import DEFAULT_DAEMON_HOST, DEFAULT_DAEMON_PORT
@@ -12,6 +13,12 @@ from opengeneral.daemon_client import DEFAULT_DAEMON_HOST, DEFAULT_DAEMON_PORT
 SERVICE_NAME = "OpenGeneralDaemon"
 SERVICE_DISPLAY = "OpenGeneral Daemon"
 SERVICE_DESCRIPTION = "OpenGeneral agent supervisor daemon."
+
+# The frozen build ships a tiny dedicated SCM host next to the main binary (see
+# packaging/service_host.py). A one-file opengeneral.exe is too slow to extract to
+# host the dispatcher within the SCM start timeout, so the service's ImagePath points
+# at this host instead, which then supervises `opengeneral.exe daemon run`.
+SERVICE_HOST_EXE = "opengeneral-svc.exe"
 
 _SERVICE_NOT_INSTALLED = 1060
 _SERVICE_NOT_ACTIVE = 1062
@@ -109,6 +116,7 @@ if _HAS_PYWIN32:
                     DEFAULT_DAEMON_HOST, DEFAULT_DAEMON_PORT, manager
                 )
 
+            self.ReportServiceStatus(win32service.SERVICE_RUNNING)
             try:
                 self.daemon.serve_forever()
             finally:
@@ -117,6 +125,24 @@ if _HAS_PYWIN32:
 
 @_require_pywin32
 def install() -> str:
+    if getattr(sys, "frozen", False):
+        host = Path(sys.executable).with_name(SERVICE_HOST_EXE)
+        if not host.exists():
+            raise RuntimeError(
+                f"Service host binary missing at {host}. Reinstall OpenGeneral so "
+                f"{SERVICE_HOST_EXE} ships next to {Path(sys.executable).name}."
+            )
+        win32serviceutil.InstallService(
+            f"{__name__}.OpenGeneralService",  # stored but unused; the host exe hosts itself
+            SERVICE_NAME,
+            SERVICE_DISPLAY,
+            description=SERVICE_DESCRIPTION,
+            startType=win32service.SERVICE_AUTO_START,
+            exeName=str(host),
+        )
+        return f"Installed Windows service {SERVICE_NAME} (host: {host})"
+
+    # Source / dev: pywin32's PythonService.exe can host the in-process class directly.
     win32serviceutil.InstallService(
         f"{__name__}.OpenGeneralService",
         SERVICE_NAME,

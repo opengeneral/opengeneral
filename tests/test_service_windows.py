@@ -47,6 +47,40 @@ def test_install_registers_the_service(monkeypatch: pytest.MonkeyPatch) -> None:
     assert f"{service_windows.__name__}.OpenGeneralService" in args
     assert service_windows.SERVICE_NAME in args
     assert "Installed Windows service" in result
+    # Non-frozen (dev) path is hosted in-process by PythonService.exe — no exeName.
+    assert "exeName" not in install_calls[0][2]
+
+
+def test_install_frozen_points_service_at_the_host_exe(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    calls = _patch_serviceutil(monkeypatch)
+    exe = tmp_path / "opengeneral.exe"
+    exe.write_text("")
+    host = tmp_path / service_windows.SERVICE_HOST_EXE
+    host.write_text("")
+    monkeypatch.setattr(service_windows.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(service_windows.sys, "executable", str(exe))
+
+    result = service_windows.install()
+
+    install_calls = [c for c in calls if c[0] == "InstallService"]
+    assert len(install_calls) == 1
+    assert install_calls[0][2].get("exeName") == str(host)
+    assert "host:" in result
+
+
+def test_install_frozen_errors_when_host_exe_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    _patch_serviceutil(monkeypatch)
+    exe = tmp_path / "opengeneral.exe"
+    exe.write_text("")  # sibling host exe intentionally absent
+    monkeypatch.setattr(service_windows.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(service_windows.sys, "executable", str(exe))
+
+    with pytest.raises(RuntimeError, match="Service host binary missing"):
+        service_windows.install()
 
 
 def test_status_state_maps_running(monkeypatch: pytest.MonkeyPatch) -> None:
