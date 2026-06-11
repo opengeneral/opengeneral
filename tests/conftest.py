@@ -102,7 +102,8 @@ def _allure_metadata(request: pytest.FixtureRequest) -> None:
     stem = path.stem
     key = stem[len("test_"):] if stem.startswith("test_") else stem
     epic, feature = _DOMAIN.get(key, ("Other", key.replace("_", " ").capitalize()))
-    os_name = platform.system()
+    # platform.system() returns "Darwin" on macOS; show the friendly name in the report.
+    os_name = {"Darwin": "macOS"}.get(platform.system(), platform.system())
     try:
         allure.dynamic.label("os", os_name)  # top-level grouping in the Behaviors tree
         allure.dynamic.epic(epic)
