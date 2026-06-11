@@ -138,7 +138,7 @@ opengeneral daemon run
 
 ### 3. Add an API key
 
-Keys are managed by the running daemon. The CLI sends the secret to the daemon, which stores the metadata (name, provider type, optional base URL) under its own config home and the secret in its OS keyring (service `opengeneral`). Storing and reading the secret in the same process is what lets the daemon use your key even when it runs as an OS service.
+Keys are managed by the running daemon. The CLI sends the secret to the daemon, which stores the metadata (name, provider type, optional base URL) under its own config home and the secret in its OS keyring (service `opengeneral`). Storing and reading the secret in the same process is what lets the daemon use your key even when it runs as an OS service. On a headless box with no usable OS keyring (a Linux server or container with no Secret Service), the daemon falls back to a `0600` `secrets.json` in its config home.
 
 ```bash
 opengeneral keys add personal-anthropic --type anthropic

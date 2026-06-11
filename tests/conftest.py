@@ -70,6 +70,7 @@ _DOMAIN: dict[str, tuple[str, str]] = {
     # Providers & API keys
     "providers": ("Providers & API keys", "Providers (LiteLLM)"),
     "key_config": ("Providers & API keys", "Key config"),
+    "keyring_store": ("Providers & API keys", "Secret store"),
     # Personas, skills & prompts
     "personas": ("Personas, skills & prompts", "Personas"),
     "usage_personas": ("Personas, skills & prompts", "Personas"),
