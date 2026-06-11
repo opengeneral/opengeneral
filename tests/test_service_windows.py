@@ -4,8 +4,9 @@ import sys
 
 import pytest
 
-# The Windows SCM backend needs pywin32 and the real win32* modules, so this
-# whole module only runs on Windows (pywin32 is a win32-only dependency).
+# conftest's collect_ignore keeps this module off non-Windows runs entirely (so it
+# leaves no skipped row in the report). The skipif is only a fallback for an explicit
+# single-file run on the wrong OS: the SCM backend needs pywin32, a win32-only dep.
 pytestmark = pytest.mark.skipif(
     sys.platform != "win32", reason="Windows SCM backend is Windows-only"
 )

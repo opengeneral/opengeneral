@@ -11,6 +11,18 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+# The OS-service backend tests are mocked, single-platform logic tests. Collect each
+# only on its native OS — so the other platforms don't carry it as a skipped row in
+# the report (it simply isn't part of their run). systemd -> Linux, launchd -> macOS,
+# Windows SCM -> Windows.
+collect_ignore = []
+if sys.platform != "linux":
+    collect_ignore.append("test_service_systemd.py")
+if sys.platform != "darwin":
+    collect_ignore.append("test_service_launchd.py")
+if sys.platform != "win32":
+    collect_ignore.append("test_service_windows.py")
+
 
 @pytest.fixture(scope="session")
 def binary() -> str:

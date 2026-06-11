@@ -6,8 +6,9 @@ from pathlib import Path
 
 import pytest
 
-# The launchd backend builds its service target from os.getuid(), which does not
-# exist on Windows — skip the whole module there.
+# conftest's collect_ignore collects this only on macOS (so it leaves no skipped row
+# elsewhere). The skipif is a fallback for an explicit single-file run on Windows,
+# where os.getuid() (used by the launchd backend) doesn't exist.
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32", reason="launchd / os.getuid() is Unix-only"
 )
