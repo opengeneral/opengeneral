@@ -51,7 +51,7 @@ def test_install_registers_the_service(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "exeName" not in install_calls[0][2]
 
 
-def test_install_frozen_points_service_at_the_host_exe(
+def test_install_frozen_runs_as_virtual_account(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
     calls = _patch_serviceutil(monkeypatch)
@@ -61,12 +61,15 @@ def test_install_frozen_points_service_at_the_host_exe(
     host.write_text("")
     monkeypatch.setattr(service_windows.sys, "frozen", True, raising=False)
     monkeypatch.setattr(service_windows.sys, "executable", str(exe))
+    monkeypatch.setattr(service_windows, "machine_home", lambda: tmp_path / "state")
+    monkeypatch.setattr(service_windows.subprocess, "run", lambda *a, **k: None)  # icacls no-op
 
     result = service_windows.install()
 
     install_calls = [c for c in calls if c[0] == "InstallService"]
     assert len(install_calls) == 1
     assert install_calls[0][2].get("exeName") == str(host)
+    assert install_calls[0][2].get("userName") == service_windows.VIRTUAL_ACCOUNT
     assert "host:" in result
 
 

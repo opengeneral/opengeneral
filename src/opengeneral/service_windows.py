@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import os
+import subprocess
 import sys
 import threading
 import traceback
@@ -13,6 +15,16 @@ from opengeneral.daemon_client import DEFAULT_DAEMON_HOST, DEFAULT_DAEMON_PORT
 SERVICE_NAME = "OpenGeneralDaemon"
 SERVICE_DISPLAY = "OpenGeneral Daemon"
 SERVICE_DESCRIPTION = "OpenGeneral agent supervisor daemon."
+
+# Low-privilege virtual service account (auto-managed by the SCM, no password). The
+# daemon runs as this instead of LocalSystem, so a compromise can't take the machine.
+VIRTUAL_ACCOUNT = f"NT SERVICE\\{SERVICE_NAME}"
+
+
+def machine_home() -> Path:
+    """Machine-wide config/state dir for the Windows service (the daemon's home)."""
+    base = os.environ.get("ProgramData", r"C:\ProgramData")
+    return Path(base) / "OpenGeneral"
 
 # The frozen build ships a tiny dedicated SCM host next to the main binary (see
 # packaging/service_host.py). A one-file opengeneral.exe is too slow to extract to
@@ -132,6 +144,16 @@ def install() -> str:
                 f"Service host binary missing at {host}. Reinstall OpenGeneral so "
                 f"{SERVICE_HOST_EXE} ships next to {Path(sys.executable).name}."
             )
+        home = machine_home()
+        home.mkdir(parents=True, exist_ok=True)
+        # Grant the virtual account full control of its config/state dir so the
+        # low-priv daemon can read/write it (and other users can't).
+        subprocess.run(
+            ["icacls", str(home), "/grant", f"{VIRTUAL_ACCOUNT}:(OI)(CI)F"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         win32serviceutil.InstallService(
             f"{__name__}.OpenGeneralService",  # stored but unused; the host exe hosts itself
             SERVICE_NAME,
@@ -139,8 +161,13 @@ def install() -> str:
             description=SERVICE_DESCRIPTION,
             startType=win32service.SERVICE_AUTO_START,
             exeName=str(host),
+            userName=VIRTUAL_ACCOUNT,
+            password=None,
         )
-        return f"Installed Windows service {SERVICE_NAME} (host: {host})"
+        return (
+            f"Installed Windows service {SERVICE_NAME} as {VIRTUAL_ACCOUNT} "
+            f"(host: {host}, state: {home})"
+        )
 
     # Source / dev: pywin32's PythonService.exe can host the in-process class directly.
     win32serviceutil.InstallService(

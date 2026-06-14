@@ -50,6 +50,12 @@ def _main_binary() -> Path:
     return Path(sys.executable).with_name("opengeneral.exe")
 
 
+def _machine_home() -> str:
+    # Machine-wide config/state dir (must match service_windows.machine_home()).
+    base = os.environ.get("ProgramData", r"C:\ProgramData")
+    return str(Path(base) / "OpenGeneral")
+
+
 def _request_daemon_stop() -> None:
     request = json.dumps({"id": "svc-stop", "method": "daemon.stop", "params": {}}).encode("utf-8")
     try:
@@ -85,7 +91,8 @@ class OpenGeneralServiceHost(win32serviceutil.ServiceFramework):
             self.ReportServiceStatus(win32service.SERVICE_STOPPED)
             return
         try:
-            self.child = subprocess.Popen([str(main), "daemon", "run"])
+            env = {**os.environ, "OPENGENERAL_HOME": _machine_home()}
+            self.child = subprocess.Popen([str(main), "daemon", "run"], env=env)
         except OSError as error:
             _log(f"OpenGeneral host: failed to start daemon: {error}", error=True)
             self.ReportServiceStatus(win32service.SERVICE_STOPPED)
