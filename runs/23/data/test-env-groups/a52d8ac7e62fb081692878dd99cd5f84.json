@@ -1,0 +1,1 @@
+{"id":"a52d8ac7e62fb081692878dd99cd5f84","fullName":"tests.test_service_systemd#test_start_when_inactive_invokes_systemctl_start","name":"test_start_when_inactive_invokes_systemctl_start","status":"passed","testResultsByEnv":{"default":"0f878e95fc9c59a1cd8dd607147c748f"}}

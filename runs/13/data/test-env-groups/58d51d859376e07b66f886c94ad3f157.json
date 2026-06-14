@@ -1,1 +1,0 @@
-{"id":"58d51d859376e07b66f886c94ad3f157","fullName":"tests.test_service_systemd#test_install_restores_previous_unit_when_enable_fails","name":"test_install_restores_previous_unit_when_enable_fails","status":"passed","testResultsByEnv":{"default":"dab945d58be48aa3dfc74e6c7b6ca3bc"}}
