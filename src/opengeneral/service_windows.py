@@ -146,14 +146,6 @@ def install() -> str:
             )
         home = machine_home()
         home.mkdir(parents=True, exist_ok=True)
-        # Grant the virtual account full control of its config/state dir so the
-        # low-priv daemon can read/write it (and other users can't).
-        subprocess.run(
-            ["icacls", str(home), "/grant", f"{VIRTUAL_ACCOUNT}:(OI)(CI)F"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
         win32serviceutil.InstallService(
             f"{__name__}.OpenGeneralService",  # stored but unused; the host exe hosts itself
             SERVICE_NAME,
@@ -163,6 +155,15 @@ def install() -> str:
             exeName=str(host),
             userName=VIRTUAL_ACCOUNT,
             password=None,
+        )
+        # Registering the service realizes the virtual account (its SID resolves only
+        # after that), so grant it control of its config/state dir afterward — the
+        # low-priv daemon reads/writes there, and other users can't.
+        subprocess.run(
+            ["icacls", str(home), "/grant", f"{VIRTUAL_ACCOUNT}:(OI)(CI)F"],
+            check=True,
+            capture_output=True,
+            text=True,
         )
         return (
             f"Installed Windows service {SERVICE_NAME} as {VIRTUAL_ACCOUNT} "
