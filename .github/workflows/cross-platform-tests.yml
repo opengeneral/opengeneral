@@ -132,16 +132,28 @@ jobs:
           echo "/usr/local/bin" >> "$GITHUB_PATH"
           echo "OPENGENERAL_BINARY=/usr/local/bin/opengeneral" >> "$GITHUB_ENV"
 
-      - name: Install binary (Windows)
+      # Install through the REAL install.ps1, fed an offline fake release (it pulls
+      # from Releases `latest`, which wouldn't match this commit) by shadowing
+      # Invoke-WebRequest. install.ps1 installs to Program Files — a system location
+      # the low-priv virtual service account can exec. Exercises the real install path.
+      - name: Install via install.ps1 (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Machine-wide (Program Files) so the low-priv virtual service account can
-          # exec the binaries — Program Files grants Authenticated Users read+execute,
-          # whereas a user-profile dir would not be reachable. Both ship together.
+          $target = 'windows-x86_64'
+          $rel = Join-Path $env:RUNNER_TEMP 'fake-release'
+          New-Item -ItemType Directory -Force -Path $rel | Out-Null
+          Copy-Item dist\opengeneral.exe (Join-Path $rel "opengeneral-$target.exe")
+          Copy-Item dist\opengeneral-svc.exe (Join-Path $rel "opengeneral-svc-$target.exe")
+          $lines = @()
+          foreach ($a in @("opengeneral-$target.exe", "opengeneral-svc-$target.exe")) {
+            $h = (Get-FileHash (Join-Path $rel $a) -Algorithm SHA256).Hash.ToLower()
+            $lines += "$h  $a"
+          }
+          $lines | Set-Content -Path (Join-Path $rel 'SHA256SUMS') -Encoding ascii
+          function Invoke-WebRequest { param($Uri, $OutFile) Copy-Item (Join-Path $rel (Split-Path $Uri -Leaf)) $OutFile }
+          & .\install.ps1
           $dir = "$env:ProgramFiles\OpenGeneral"
-          New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          Copy-Item dist\opengeneral*.exe $dir -Force
           Add-Content -Path $env:GITHUB_PATH -Value $dir
           Add-Content -Path $env:GITHUB_ENV -Value "OPENGENERAL_BINARY=$dir\opengeneral.exe"
 
@@ -174,6 +186,17 @@ jobs:
             exit 1
           fi
           echo "uninstall removed the binary"
+
+      # Uninstall through the real install.ps1 (the service was already removed by the
+      # e2e fixture teardown; install.ps1's daemon uninstall is idempotent).
+      - name: Uninstall and verify removal (Windows)
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & .\install.ps1 -Uninstall
+          $bin = "$env:ProgramFiles\OpenGeneral\opengeneral.exe"
+          if (Test-Path $bin) { Write-Error "binary still present after uninstall"; exit 1 }
+          Write-Host "uninstall removed the binary"
 
       - uses: actions/upload-artifact@v4
         if: always()
