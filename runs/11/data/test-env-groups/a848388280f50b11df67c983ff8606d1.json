@@ -1,1 +1,0 @@
-{"id":"a848388280f50b11df67c983ff8606d1","fullName":"tests.test_daemon#test_request_shutdown_before_serve_does_not_deadlock","name":"test_request_shutdown_before_serve_does_not_deadlock","status":"passed","testResultsByEnv":{"default":"ef0a0a717d0c5ed6945e99c50c01338b"}}
