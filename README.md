@@ -56,7 +56,7 @@ The same OpenGeneral harness should be able to spawn agents from any persona aga
 
 ## Install
 
-OpenGeneral ships as a self-contained binary — no Python environment is needed at runtime.
+OpenGeneral ships as a self-contained binary — no Python environment is needed at runtime. It runs as a least-privilege **system service** (boot-started, survives logout), so the binary goes in a system location and installation needs root/admin once.
 
 **Linux / macOS (Apple Silicon):**
 
@@ -64,19 +64,23 @@ OpenGeneral ships as a self-contained binary — no Python environment is needed
 curl -LsSf https://raw.githubusercontent.com/opengeneral/opengeneral/main/install.sh | sh
 ```
 
-**Windows (PowerShell):**
+`install.sh` installs the binary to `/usr/local/bin` and uses `sudo` for the privileged steps — sudo reads its password from your terminal, so this works even under `curl | sh`.
+
+**Windows (run in an Administrator PowerShell):**
 
 ```powershell
 irm https://raw.githubusercontent.com/opengeneral/opengeneral/main/install.ps1 | iex
 ```
 
-The installer downloads the matching binary from the latest GitHub Release, verifies its checksum, and installs it to `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\Programs\OpenGeneral` (Windows, added to your per-user PATH). Useful flags:
+`install.ps1` installs the binaries to `%ProgramFiles%\OpenGeneral` and requires Administrator.
 
-- `--with-service` (`-WithService` on Windows) also registers the background daemon. On Windows that step prompts for Administrator elevation automatically.
-- `--uninstall` (`-Uninstall`) unregisters the daemon and removes the binary, leaving your config and keyring secrets intact.
+The installer downloads the matching binary (two binaries on Windows — the main one plus the service host) from the latest GitHub Release, verifies the checksum(s), and adds the install dir to PATH. Useful flags:
+
+- `--with-service` (`-WithService` on Windows) also registers the background daemon service.
+- `--uninstall` (`-Uninstall`) unregisters the daemon and removes the binary, leaving your config and secrets intact.
 - `--version=vX.Y.Z` (`-Version`) installs a specific release; `INSTALL_DIR` overrides the install directory.
 
-The binaries are unsigned, so macOS Gatekeeper / Windows SmartScreen may warn on first launch. The frozen binary is service-manager aware: `opengeneral daemon install` writes a systemd unit / launchd agent / Windows service whose launch command is the installed binary plus `daemon run`.
+The binaries are unsigned, so macOS Gatekeeper / Windows SmartScreen may warn on first launch. The daemon runs under a least-privilege account — a systemd `DynamicUser` (Linux), a LaunchDaemon as `nobody` (macOS), or the `NT SERVICE\OpenGeneralDaemon` virtual account (Windows) — boot-started and independent of any login. `opengeneral daemon install` writes the service definition whose launch command is the installed binary plus `daemon run`.
 
 **Intel Macs** have no prebuilt binary (Rosetta runs Intel binaries on Apple Silicon, not the reverse) — build from source instead (see below).
 
@@ -114,23 +118,23 @@ On Linux/macOS a `Makefile` wraps the common tasks — run `make help` to list t
 
 ### 2. Install and start the daemon
 
-The daemon owns all runtime state — agents, API keys, and Action Plane endpoints. Install and start it first; the `keys` and `action-planes` commands below are thin clients that talk to it.
+The daemon owns all runtime state — agents, API keys, and Action Plane endpoints. It runs as a **least-privilege system service** (boot-started, survives logout), so install and start it with root/admin first; the `keys` and `action-planes` commands below are thin clients that talk to it.
 
 ```bash
-opengeneral daemon install
-opengeneral daemon start
+sudo opengeneral daemon install   # in an Administrator PowerShell on Windows (no sudo)
+sudo opengeneral daemon start
 opengeneral daemon status
 ```
 
-- Linux: installs a per-user `systemd` unit at `~/.config/systemd/user/opengeneral.service`. Run `loginctl enable-linger $USER` once if you want the service to keep running after you log out.
-- macOS: installs a per-user `launchd` agent at `~/Library/LaunchAgents/com.opengeneral.daemon.plist`.
-- Windows: registers a Windows service — a tiny `opengeneral-svc.exe` hosts the SCM service and supervises the daemon process.
+- Linux: a system `systemd` unit at `/etc/systemd/system/opengeneral.service`, run under a `DynamicUser` with state in `/var/lib/opengeneral`.
+- macOS: a `launchd` LaunchDaemon at `/Library/LaunchDaemons/com.opengeneral.daemon.plist`, run as `nobody` with state in `/Library/Application Support/OpenGeneral`.
+- Windows: an SCM service under the `NT SERVICE\OpenGeneralDaemon` virtual account, with state in `%ProgramData%\OpenGeneral`.
 
-The service's launch command is pinned at install time (the install output prints it). If that path changes — you rebuild the environment or move a packaged binary — re-run `opengeneral daemon install`.
+The service's launch command is pinned at install time. If the binary path changes — you rebuild or move it — re-run `daemon install`.
 
-If the daemon fails to load persisted agents on startup it exits with code 78, and the service definition keeps it from respawning in a tight loop (`RestartPreventExitStatus=78` on systemd, `KeepAlive=Crashed` on launchd). Fix the underlying config and then `opengeneral daemon start`.
+If the daemon fails to load persisted agents on startup it exits with code 78, and the service definition keeps it from respawning in a tight loop (`RestartPreventExitStatus=78` on systemd, `KeepAlive` Crashed-only on launchd). Fix the underlying config and then `daemon start` again.
 
-In a container or other environment without a supported service manager, run the daemon in the foreground instead:
+In a container or other environment without a supported service manager, run the daemon in the foreground instead (set `OPENGENERAL_HOME` to a writable dir):
 
 ```bash
 opengeneral daemon run

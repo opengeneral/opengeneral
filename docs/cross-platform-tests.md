@@ -49,9 +49,10 @@ systems without a service manager — it's covered as a secondary scenario.
 
 ### `unit`
 Installs `.[dev]` and runs the mocked source tests (ignoring `tests/integration`,
-`tests/installer`, and `tests/e2e`, which need the built binary). Platform-specific
-backends are guarded: launchd tests skip on Windows; Windows SCM tests skip
-elsewhere. `systemctl`/`launchctl`/`win32serviceutil` are mocked.
+`tests/installer`, and `tests/e2e`, which need the built binary). Each OS-service
+backend is collected only on its native OS (systemd → Linux, launchd → macOS, SCM →
+Windows) via `collect_ignore`, so the others don't carry it as a skipped row;
+`systemctl`/`launchctl`/`win32serviceutil` are mocked.
 
 ### `build`
 Installs `.[build]`, builds the binary (`packaging/build.sh` / `build.ps1`), and
@@ -64,36 +65,37 @@ test runner** (`pytest allure-pytest keyring`) — deliberately *not* `pip insta
 
 1. **Install (the "install script" stage):** runs the real `install.sh` /
    `install.ps1`, fed an *offline fake release* built from the artifact (the
-   installer pulls from Releases `latest`, which wouldn't match this commit), to put
-   the binary on `PATH`.
+   installer pulls from Releases `latest`, which wouldn't match this commit). The
+   binary lands in a **system location** the low-priv service account can exec —
+   `/usr/local/bin` on Unix, `%ProgramFiles%\OpenGeneral` on Windows.
 2. **Binary + installer suites (no service):** `pytest tests/integration
    tests/installer` — the secondary `--no-service` path. `tests/integration` drives
    a **foreground** daemon (isolated port + `OPENGENERAL_HOME`); `tests/installer`
    is installer-correctness (download + checksum verify + checksum-mismatch
-   rejection + uninstall). No OS service is touched here, so it runs first and can't
-   disturb the service started next.
+   rejection). No OS service is touched here, so it runs first and can't disturb the
+   service started next.
 3. **Service journey (`OPENGENERAL_E2E=1`):** `pytest tests/e2e` installs and starts
-   the **real OS service** (systemd user unit / launchd agent / Windows SCM —
-   abstracted by the binary itself), then asserts the service-managed daemon is
-   serving RPC and exercises `spawn`/`talk` against it, then uninstalls it (fixture
-   teardown).
-4. **Uninstall + verify:** runs `install.sh --uninstall` and asserts the binary is
-   gone (Unix).
+   the **real low-privilege system service** — a systemd `DynamicUser` unit (Linux),
+   a LaunchDaemon running as `nobody` (macOS), or an SCM service under the
+   `NT SERVICE\OpenGeneralDaemon` virtual account (Windows) — then asserts the
+   service-managed daemon serves RPC, that a key it stores is readable back, and
+   exercises `spawn`/`talk` against it, then uninstalls it (fixture teardown).
+   install/start/stop need root, so the fixture uses `sudo` on Linux/macOS (the
+   Windows runner is already elevated).
+4. **Uninstall + verify:** runs `install.sh --uninstall` / `install.ps1 -Uninstall`
+   and asserts the binary is gone.
 
-Linux gets `loginctl enable-linger` + `XDG_RUNTIME_DIR` so the per-user systemd
-manager is reachable; macOS uses the runner's GUI session for launchd.
+So the full real-user path — *install via the actual installer → register + start the
+service → use it → uninstall* — is exercised end to end, not bypassed.
 
 The Windows SCM service is hosted by a second, tiny binary (`opengeneral-svc.exe`)
-that ships alongside `opengeneral.exe` — a one-file `opengeneral.exe` extracts too
+that ships alongside `opengeneral.exe`: a one-file `opengeneral.exe` extracts too
 slowly to host the dispatcher within the SCM start timeout, so the small host hosts
 the service and supervises `opengeneral.exe daemon run` as a child. Secrets are stored
-by the daemon (OS keyring where available, else a `0600` file), so the service can use
-them even running as LocalSystem.
-
-**Known failure (documented, not hidden):** `spawn`/`talk` are `xfail` on every OS —
-the binary loads default personas/skills via a relative `Path("personas")` and bundles
-no data files, so an installed binary finds no persona. They flip to pass once that
-bundling is fixed.
+by the daemon (OS keyring where available, else a `0600` file in its config dir), so
+the service uses them under its own low-privilege account. The default personas/skills
+are bundled into the binary, so `spawn`/`talk` work through the service on every OS —
+there are no `xfail`s.
 
 ### `report` (Allure -> GitHub Pages)
 `if: always()`, so it reports even when tests fail. Each test job emits Allure
@@ -126,10 +128,11 @@ pytest tests --ignore=tests/integration --ignore=tests/installer --ignore=tests/
 ./packaging/build.sh
 pytest tests/integration tests/installer
 
-# Service journey — installs and starts a REAL OS service, so it's opt-in.
-# (Best run in a throwaway VM/container; it touches your ~/.opengeneral and
-# registers an OS service.)
-OPENGENERAL_E2E=1 OPENGENERAL_BINARY="$PWD/dist/opengeneral" pytest tests/e2e
+# Service journey — installs and starts a REAL low-privilege system service (the
+# fixture uses sudo), so it's opt-in. Best run in a throwaway VM/container: it needs
+# the binary in a system path (e.g. sudo install -m0755 dist/opengeneral /usr/local/bin)
+# and writes machine-wide config.
+OPENGENERAL_E2E=1 OPENGENERAL_BINARY=/usr/local/bin/opengeneral pytest tests/e2e
 
 # Emit Allure results (then `allure serve allure-results` to view locally)
 pytest tests --alluredir=allure-results
