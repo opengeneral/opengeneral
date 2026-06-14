@@ -10,29 +10,29 @@ from xml.sax.saxutils import escape
 from opengeneral.service import daemon_args, daemon_command
 
 LABEL = "com.opengeneral.daemon"
+
+# A system-wide LaunchDaemon (not a per-user LaunchAgent), so the daemon runs at boot
+# under a least-privilege account independent of any login. Managed with sudo.
+DAEMON_PLIST_DIR = Path("/Library/LaunchDaemons")
+SERVICE_USER = "nobody"
+MACHINE_HOME = Path("/Library/Application Support/OpenGeneral")
+
 _PID_PATTERN = re.compile(r'"PID"\s*=\s*\d+')
 
 
 def plist_path() -> Path:
-    return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
-
-
-def _domain_target() -> str:
-    return f"gui/{os.getuid()}"
+    return DAEMON_PLIST_DIR / f"{LABEL}.plist"
 
 
 def _service_target() -> str:
-    return f"gui/{os.getuid()}/{LABEL}"
+    return f"system/{LABEL}"
 
 
 def plist_content() -> str:
-    program_args = "".join(
-        f"        <string>{escape(arg)}</string>\n" for arg in daemon_args()
-    )
-    # KeepAlive Crashed-only means launchd restarts the daemon if it is killed by a
-    # signal, but NOT when it exits cleanly. A clean exit covers both a graceful
-    # stop (code 0) and the config-error exit (code 78), so a bad config does not
-    # produce a restart loop — the launchd analogue of systemd RestartPreventExitStatus.
+    program_args = "".join(f"        <string>{escape(arg)}</string>\n" for arg in daemon_args())
+    # KeepAlive Crashed-only: launchd restarts the daemon if it is killed by a signal,
+    # but not on a clean exit — so a graceful stop (0) or the config-error exit (78)
+    # does not loop. The launchd analogue of systemd RestartPreventExitStatus.
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
@@ -45,6 +45,13 @@ def plist_content() -> str:
         "    <array>\n"
         f"{program_args}"
         "    </array>\n"
+        "    <key>UserName</key>\n"
+        f"    <string>{SERVICE_USER}</string>\n"
+        "    <key>EnvironmentVariables</key>\n"
+        "    <dict>\n"
+        "        <key>OPENGENERAL_HOME</key>\n"
+        f"        <string>{escape(str(MACHINE_HOME))}</string>\n"
+        "    </dict>\n"
         "    <key>RunAtLoad</key>\n"
         "    <true/>\n"
         "    <key>KeepAlive</key>\n"
@@ -64,12 +71,7 @@ def _launchctl(*args: str, check: bool = True) -> subprocess.CompletedProcess[st
             "as a service. You can still run the daemon in the foreground with: "
             "opengeneral daemon run"
         )
-    result = subprocess.run(
-        ["launchctl", *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = subprocess.run(["launchctl", *args], capture_output=True, text=True, check=False)
     if check and result.returncode != 0:
         message = (result.stderr or result.stdout or "").strip()
         raise RuntimeError(f"launchctl {' '.join(args)} failed: {message}")
@@ -85,7 +87,22 @@ def status_state() -> str:
     return "stopped"
 
 
+def _prepare_state_dir() -> None:
+    # State dir owned by the service account so the daemon can write it and other
+    # users can't. Real installs run as root (sudo); a non-root call (tests) just
+    # creates the dir and skips the chown.
+    MACHINE_HOME.mkdir(parents=True, exist_ok=True)
+    try:
+        import pwd
+
+        os.chown(MACHINE_HOME, pwd.getpwnam(SERVICE_USER).pw_uid, -1)
+        os.chmod(MACHINE_HOME, 0o700)
+    except (KeyError, PermissionError, OSError):
+        pass
+
+
 def install() -> str:
+    _prepare_state_dir()
     path = plist_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     previous = path.read_text(encoding="utf-8") if path.exists() else None
@@ -93,19 +110,18 @@ def install() -> str:
     # Bootout any prior registration so a reinstall picks up the new plist cleanly.
     _launchctl("bootout", _service_target(), check=False)
     try:
-        _launchctl("bootstrap", _domain_target(), str(path))
+        _launchctl("bootstrap", "system", str(path))
     except Exception:
         if previous is not None:
             path.write_text(previous, encoding="utf-8")
-            _launchctl("bootstrap", _domain_target(), str(path), check=False)
+            _launchctl("bootstrap", "system", str(path), check=False)
         else:
             path.unlink(missing_ok=True)
         raise
     return (
-        f"Installed launchd user agent at {path}.\n"
-        f"The agent runs: {daemon_command()}\n"
-        "Re-run `opengeneral daemon install` if that path changes "
-        "(e.g. you rebuild the environment or move the binary)."
+        f"Installed launchd system daemon at {path}.\n"
+        f"It runs as {SERVICE_USER} with state in {MACHINE_HOME}; launch: {daemon_command()}.\n"
+        "Re-run `sudo opengeneral daemon install` if the binary path changes."
     )
 
 
@@ -114,7 +130,7 @@ def uninstall() -> str:
     _launchctl("bootout", _service_target(), check=False)
     if path.exists():
         path.unlink()
-    return f"Uninstalled launchd user agent at {path}"
+    return f"Uninstalled launchd system daemon at {path}"
 
 
 def start() -> str:

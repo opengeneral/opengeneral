@@ -8,19 +8,23 @@ import pytest
 
 # conftest's collect_ignore collects this only on macOS (so it leaves no skipped row
 # elsewhere). The skipif is a fallback for an explicit single-file run on Windows,
-# where os.getuid() (used by the launchd backend) doesn't exist.
+# where the launchd backend (pwd, launchctl) is unavailable.
 pytestmark = pytest.mark.skipif(
-    sys.platform == "win32", reason="launchd / os.getuid() is Unix-only"
+    sys.platform == "win32", reason="launchd backend is Unix-only"
 )
 
 from opengeneral import service_launchd
 
 
 @pytest.fixture
-def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr("shutil.which", lambda name: "/bin/launchctl" if name == "launchctl" else None)
-    return tmp_path / "Library" / "LaunchAgents"
+def isolated_plist_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    plist_dir = tmp_path / "LaunchDaemons"
+    monkeypatch.setattr(service_launchd, "DAEMON_PLIST_DIR", plist_dir)
+    monkeypatch.setattr(service_launchd, "MACHINE_HOME", tmp_path / "state")
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/bin/launchctl" if name == "launchctl" else None
+    )
+    return plist_dir
 
 
 def _scripted_launchctl(
@@ -31,7 +35,9 @@ def _scripted_launchctl(
     calls: list[list[str]] = []
     plan = script or {}
 
-    monkeypatch.setattr("shutil.which", lambda name: "/bin/launchctl" if name == "launchctl" else None)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/bin/launchctl" if name == "launchctl" else None
+    )
 
     def _run(cmd, capture_output, text, check):  # noqa: ANN001
         calls.append(list(cmd))
@@ -43,46 +49,48 @@ def _scripted_launchctl(
     return calls
 
 
-def test_plist_content_includes_label_and_program_args() -> None:
+def test_plist_runs_as_service_user_with_machine_home() -> None:
     content = service_launchd.plist_content()
 
     assert f"<string>{service_launchd.LABEL}</string>" in content
     assert f"<string>{sys.executable}</string>" in content
+    assert f"<string>{service_launchd.SERVICE_USER}</string>" in content
+    assert "OPENGENERAL_HOME" in content
     assert "<key>KeepAlive</key>" in content
     assert "<key>Crashed</key>" in content
 
 
-def test_install_writes_plist_and_bootstraps(
-    isolated_home: Path, monkeypatch: pytest.MonkeyPatch
+def test_install_writes_plist_and_bootstraps_system(
+    isolated_plist_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls = _scripted_launchctl(monkeypatch)
 
     result = service_launchd.install()
 
-    plist = isolated_home / f"{service_launchd.LABEL}.plist"
+    plist = isolated_plist_dir / f"{service_launchd.LABEL}.plist"
     assert plist.exists()
     assert service_launchd.LABEL in plist.read_text(encoding="utf-8")
-    assert any(call[1] == "bootstrap" for call in calls)
-    assert "Installed launchd user agent" in result
+    assert ["launchctl", "bootstrap", "system", str(plist)] in calls
+    assert "Installed launchd system daemon" in result
 
 
 def test_install_rolls_back_when_bootstrap_fails(
-    isolated_home: Path, monkeypatch: pytest.MonkeyPatch
+    isolated_plist_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _scripted_launchctl(monkeypatch, {"bootstrap": (1, "Bootstrap failed: 5: Input/output error")})
 
     with pytest.raises(RuntimeError, match="bootstrap.*failed"):
         service_launchd.install()
 
-    plist = isolated_home / f"{service_launchd.LABEL}.plist"
+    plist = isolated_plist_dir / f"{service_launchd.LABEL}.plist"
     assert not plist.exists()
 
 
 def test_install_restores_previous_plist_when_bootstrap_fails(
-    isolated_home: Path, monkeypatch: pytest.MonkeyPatch
+    isolated_plist_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    isolated_home.mkdir(parents=True, exist_ok=True)
-    plist = isolated_home / f"{service_launchd.LABEL}.plist"
+    isolated_plist_dir.mkdir(parents=True, exist_ok=True)
+    plist = isolated_plist_dir / f"{service_launchd.LABEL}.plist"
     plist.write_text("previous content", encoding="utf-8")
     _scripted_launchctl(monkeypatch, {"bootstrap": (1, "Bootstrap failed")})
 
@@ -93,18 +101,18 @@ def test_install_restores_previous_plist_when_bootstrap_fails(
 
 
 def test_uninstall_removes_plist_and_boots_out(
-    isolated_home: Path, monkeypatch: pytest.MonkeyPatch
+    isolated_plist_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    isolated_home.mkdir(parents=True, exist_ok=True)
-    plist = isolated_home / f"{service_launchd.LABEL}.plist"
+    isolated_plist_dir.mkdir(parents=True, exist_ok=True)
+    plist = isolated_plist_dir / f"{service_launchd.LABEL}.plist"
     plist.write_text("stub", encoding="utf-8")
     calls = _scripted_launchctl(monkeypatch)
 
     result = service_launchd.uninstall()
 
     assert not plist.exists()
-    assert any(call[1] == "bootout" for call in calls)
-    assert "Uninstalled launchd user agent" in result
+    assert ["launchctl", "bootout", service_launchd._service_target()] in calls
+    assert "Uninstalled launchd system daemon" in result
 
 
 def test_start_when_stopped_kickstarts(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -112,7 +120,7 @@ def test_start_when_stopped_kickstarts(monkeypatch: pytest.MonkeyPatch) -> None:
 
     result = service_launchd.start()
 
-    assert any(call[1] == "kickstart" for call in calls)
+    assert ["launchctl", "kickstart", service_launchd._service_target()] in calls
     assert result == "Started OpenGeneral daemon"
 
 

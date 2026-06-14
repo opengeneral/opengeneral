@@ -28,9 +28,10 @@ import pytest
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 4777
 
-# Linux uses a system-wide systemd unit, so daemon install/start/stop/uninstall need
-# root. macOS/Windows registration runs with the privileges the runner already has.
-_SUDO = ["sudo"] if sys.platform == "linux" else []
+# Linux (systemd) and macOS (LaunchDaemon) run system-wide services, so daemon
+# install/start/stop/uninstall need root. Windows registration runs with the
+# privileges the runner already has (the SCM service installs elevated).
+_SUDO = ["sudo"] if sys.platform in ("linux", "darwin") else []
 
 
 def _rpc(method: str, params: dict | None = None, timeout: float = 3.0) -> dict:
