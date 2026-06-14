@@ -1,0 +1,22 @@
+== install ==
+Downloading opengeneral-macos-arm64 (latest) ...
+Installed opengeneral to /var/folders/dq/2t71w9pd3jx50vh3kp15_dt40000gn/T/tmp.ab61QjtYnU/bin/opengeneral
+
+Warning: /var/folders/dq/2t71w9pd3jx50vh3kp15_dt40000gn/T/tmp.ab61QjtYnU/bin is not on your PATH.
+Add it to your shell profile:  export PATH="/var/folders/dq/2t71w9pd3jx50vh3kp15_dt40000gn/T/tmp.ab61QjtYnU/bin:$PATH"
+
+Next steps (the daemon runs as an OS service, so these need sudo):
+  sudo opengeneral daemon install
+  sudo opengeneral daemon start
+  opengeneral action-planes add default --endpoint http://127.0.0.1:4767/mcp
+  opengeneral keys add <name> --type anthropic
+ok: binary installed
+ok: installed binary runs --help
+== checksum mismatch is rejected ==
+ok: tampered checksum -> non-zero exit
+ok: no binary installed on checksum failure
+== reinstall then uninstall ==
+ok: reinstalled
+ok: uninstall removed the binary
+All 6 installer checks passed.
+
