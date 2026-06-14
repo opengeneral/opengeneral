@@ -11,17 +11,20 @@ from opengeneral import service_systemd
 
 @pytest.fixture
 def isolated_unit_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/systemctl" if name == "systemctl" else None)
-    return tmp_path / "systemd" / "user"
+    unit_dir = tmp_path / "systemd-system"
+    monkeypatch.setattr(service_systemd, "SYSTEM_UNIT_DIR", unit_dir)
+    monkeypatch.setattr(
+        "shutil.which", lambda name: "/usr/bin/systemctl" if name == "systemctl" else None
+    )
+    return unit_dir
 
 
 def _scripted_systemctl(
     monkeypatch: pytest.MonkeyPatch, script: dict[str, tuple[int, str]] | None = None
 ) -> list[list[str]]:
-    """Patch subprocess.run with a scripted systemctl that picks a (returncode, stdout)
-    keyed on the subcommand verb (`systemctl --user <verb> ...`). Also stubs
-    shutil.which so the tests run on macOS/Windows hosts that have no systemctl."""
+    """Patch subprocess.run with a scripted systemctl (system, not --user) keyed on
+    the subcommand verb. Also stubs shutil.which so the tests run on hosts with no
+    systemctl (macOS/Windows)."""
     calls: list[list[str]] = []
     plan = script or {}
 
@@ -31,7 +34,7 @@ def _scripted_systemctl(
 
     def _run(cmd, capture_output, text, check):  # noqa: ANN001
         calls.append(list(cmd))
-        verb = cmd[2]  # ["systemctl", "--user", <verb>, ...]
+        verb = cmd[1]  # ["systemctl", <verb>, ...]
         returncode, stdout = plan.get(verb, (0, ""))
         return subprocess.CompletedProcess(cmd, returncode, stdout, "")
 
@@ -44,12 +47,15 @@ def fake_systemctl(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     return _scripted_systemctl(monkeypatch, {"is-active": (0, "inactive\n")})
 
 
-def test_unit_content_uses_current_python_and_pins_config_exit_code() -> None:
+def test_unit_runs_least_privilege_with_machine_state() -> None:
     content = service_systemd.unit_content()
 
     assert "[Service]" in content
     assert f"ExecStart={service_systemd.daemon_command()}" in content
-    assert "Restart=on-failure" in content
+    assert "DynamicUser=yes" in content
+    assert f"StateDirectory={service_systemd.STATE_DIRECTORY_NAME}" in content
+    assert f"Environment=OPENGENERAL_HOME={service_systemd.MACHINE_HOME}" in content
+    assert "WantedBy=multi-user.target" in content
     assert "RestartPreventExitStatus=78" in content
 
 
@@ -70,10 +76,10 @@ def test_install_writes_unit_and_enables(isolated_unit_dir: Path, fake_systemctl
 
     unit_path = isolated_unit_dir / service_systemd.SERVICE_NAME
     assert unit_path.exists()
-    assert "opengeneral" in unit_path.read_text(encoding="utf-8")
-    assert ["systemctl", "--user", "daemon-reload"] in fake_systemctl
-    assert ["systemctl", "--user", "enable", service_systemd.SERVICE_NAME] in fake_systemctl
-    assert "Installed systemd user service" in result
+    assert "DynamicUser=yes" in unit_path.read_text(encoding="utf-8")
+    assert ["systemctl", "daemon-reload"] in fake_systemctl
+    assert ["systemctl", "enable", service_systemd.SERVICE_NAME] in fake_systemctl
+    assert "Installed systemd service" in result
 
 
 def test_install_rolls_back_when_enable_fails(
@@ -117,8 +123,8 @@ def test_uninstall_removes_unit_and_disables(isolated_unit_dir: Path, fake_syste
     result = service_systemd.uninstall()
 
     assert not unit_path.exists()
-    assert ["systemctl", "--user", "disable", "--now", service_systemd.SERVICE_NAME] in fake_systemctl
-    assert "Uninstalled systemd user service" in result
+    assert ["systemctl", "disable", "--now", service_systemd.SERVICE_NAME] in fake_systemctl
+    assert "Uninstalled systemd service" in result
 
 
 def test_start_when_inactive_invokes_systemctl_start(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -126,8 +132,8 @@ def test_start_when_inactive_invokes_systemctl_start(monkeypatch: pytest.MonkeyP
 
     result = service_systemd.start()
 
-    assert calls[0] == ["systemctl", "--user", "is-active", service_systemd.SERVICE_NAME]
-    assert ["systemctl", "--user", "start", service_systemd.SERVICE_NAME] in calls
+    assert calls[0] == ["systemctl", "is-active", service_systemd.SERVICE_NAME]
+    assert ["systemctl", "start", service_systemd.SERVICE_NAME] in calls
     assert result == "Started OpenGeneral daemon"
 
 
@@ -137,7 +143,7 @@ def test_start_when_already_active_is_idempotent(monkeypatch: pytest.MonkeyPatch
     result = service_systemd.start()
 
     assert result == "OpenGeneral daemon already running"
-    assert ["systemctl", "--user", "start", service_systemd.SERVICE_NAME] not in calls
+    assert ["systemctl", "start", service_systemd.SERVICE_NAME] not in calls
 
 
 def test_status_normalizes_active_to_running(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -99,17 +99,23 @@ jobs:
       - name: Install test runner only
         run: python -m pip install pytest allure-pytest keyring
 
-      - name: Enable systemd user session (Linux)
+      # Linux runs a system-wide systemd unit whose daemon runs as a DynamicUser,
+      # which can only exec a binary in a system location (not a user home). Install
+      # it there with sudo; install.sh's system-service path is covered separately.
+      - name: Install binary to a system path (Linux)
         if: runner.os == 'Linux'
+        shell: bash
         run: |
-          loginctl enable-linger "$USER" || true
-          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          sudo install -m 0755 dist/opengeneral /usr/local/bin/opengeneral
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          echo "OPENGENERAL_BINARY=/usr/local/bin/opengeneral" >> "$GITHUB_ENV"
 
-      # Install the binary the way a user does — through the real install.sh, fed an
-      # offline fake release built from the artifact (install.sh pulls from Releases
-      # `latest`, which wouldn't match this commit). This is the "install script" stage.
-      - name: Install via install.sh (Unix)
-        if: runner.os != 'Windows'
+      # macOS still uses a per-user LaunchAgent, so install the way a user does —
+      # through the real install.sh, fed an offline fake release built from the
+      # artifact (install.sh pulls from Releases `latest`, which wouldn't match this
+      # commit). This is the "install script" stage.
+      - name: Install via install.sh (macOS)
+        if: runner.os == 'macOS'
         shell: bash
         run: |
           set -eu
@@ -168,12 +174,25 @@ jobs:
           OPENGENERAL_E2E: "1"
         run: python -m pytest tests/e2e --alluredir=allure-results
 
-      - name: Uninstall and verify removal (Unix)
-        if: always() && runner.os != 'Windows'
+      - name: Uninstall and verify removal (macOS)
+        if: always() && runner.os == 'macOS'
         shell: bash
         run: |
           sh ./install.sh --uninstall || true
           if [ -e "$HOME/.local/bin/opengeneral" ]; then
+            echo "binary still present after uninstall" >&2
+            exit 1
+          fi
+          echo "uninstall removed the binary"
+
+      - name: Uninstall and verify removal (Linux)
+        if: always() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          # The service was uninstalled by the e2e fixture (sudo daemon uninstall);
+          # here we just remove the system binary.
+          sudo rm -f /usr/local/bin/opengeneral
+          if [ -e /usr/local/bin/opengeneral ]; then
             echo "binary still present after uninstall" >&2
             exit 1
           fi

@@ -17,6 +17,7 @@ import json
 import os
 import socket
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 
@@ -26,6 +27,10 @@ import pytest
 # service-managed daemon always binds the defaults — never an isolated test port.
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 4777
+
+# Linux uses a system-wide systemd unit, so daemon install/start/stop/uninstall need
+# root. macOS/Windows registration runs with the privileges the runner already has.
+_SUDO = ["sudo"] if sys.platform == "linux" else []
 
 
 def _rpc(method: str, params: dict | None = None, timeout: float = 3.0) -> dict:
@@ -60,16 +65,16 @@ def service(binary: str):
         )
 
     def _cleanup() -> None:
-        subprocess.run([binary, "daemon", "stop"], capture_output=True, text=True, timeout=60)
-        subprocess.run([binary, "daemon", "uninstall"], capture_output=True, text=True, timeout=60)
+        subprocess.run([*_SUDO, binary, "daemon", "stop"], capture_output=True, text=True, timeout=60)
+        subprocess.run([*_SUDO, binary, "daemon", "uninstall"], capture_output=True, text=True, timeout=60)
 
     try:
         installed = subprocess.run(
-            [binary, "daemon", "install"], capture_output=True, text=True, timeout=60
+            [*_SUDO, binary, "daemon", "install"], capture_output=True, text=True, timeout=60
         )
         assert installed.returncode == 0, f"daemon install failed:\n{installed.stdout}\n{installed.stderr}"
         started = subprocess.run(
-            [binary, "daemon", "start"], capture_output=True, text=True, timeout=60
+            [*_SUDO, binary, "daemon", "start"], capture_output=True, text=True, timeout=60
         )
         assert started.returncode == 0, f"daemon start failed:\n{started.stdout}\n{started.stderr}"
 
