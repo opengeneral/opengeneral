@@ -99,16 +99,36 @@ jobs:
       - name: Install test runner only
         run: python -m pip install pytest allure-pytest keyring
 
-      # Linux (systemd DynamicUser) and macOS (LaunchDaemon as nobody) both run the
-      # daemon under a least-privilege account that can only exec a binary in a system
-      # location, not a user home — so install it to /usr/local/bin with sudo.
-      # install.sh's system-service path is covered separately (installer test).
-      - name: Install binary to a system path (Unix)
+      # Install through the REAL install.sh, fed an offline fake release built from the
+      # artifact (it pulls from Releases `latest`, which wouldn't match this commit).
+      # install.sh sudo-installs to /usr/local/bin — a system location the low-priv
+      # service account can exec. This exercises the real install path end-to-end.
+      - name: Install via install.sh (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          sudo mkdir -p /usr/local/bin
-          sudo install -m 0755 dist/opengeneral /usr/local/bin/opengeneral
+          set -eu
+          chmod +x dist/opengeneral
+          case "$RUNNER_OS" in
+            Linux) target=linux-x86_64 ;;
+            macOS) target=macos-arm64 ;;
+          esac
+          export FAKE_REL="$RUNNER_TEMP/fake-release"
+          mkdir -p "$FAKE_REL"
+          cp dist/opengeneral "$FAKE_REL/opengeneral-$target"
+          ( cd "$FAKE_REL" && { command -v sha256sum >/dev/null 2>&1 \
+              && sha256sum "opengeneral-$target" \
+              || shasum -a 256 "opengeneral-$target"; } > SHA256SUMS )
+          STUB="$RUNNER_TEMP/stub"; mkdir -p "$STUB"
+          {
+            echo '#!/usr/bin/env bash'
+            echo 'out=""; url=""'
+            echo 'while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift 2 ;; -*) shift ;; *) url="$1"; shift ;; esac; done'
+            echo 'cp "$FAKE_REL/$(basename "$url")" "$out"'
+          } > "$STUB/curl"
+          chmod +x "$STUB/curl"
+          export PATH="$STUB:$PATH"
+          sh ./install.sh
           echo "/usr/local/bin" >> "$GITHUB_PATH"
           echo "OPENGENERAL_BINARY=/usr/local/bin/opengeneral" >> "$GITHUB_ENV"
 
@@ -142,13 +162,13 @@ jobs:
           OPENGENERAL_E2E: "1"
         run: python -m pytest tests/e2e --alluredir=allure-results
 
+      # Uninstall through the real install.sh (the service was already removed by the
+      # e2e fixture's teardown; install.sh's daemon uninstall is idempotent).
       - name: Uninstall and verify removal (Unix)
         if: always() && runner.os != 'Windows'
         shell: bash
         run: |
-          # The service was uninstalled by the e2e fixture (sudo daemon uninstall);
-          # here we just remove the system binary.
-          sudo rm -f /usr/local/bin/opengeneral
+          sh ./install.sh --uninstall || true
           if [ -e /usr/local/bin/opengeneral ]; then
             echo "binary still present after uninstall" >&2
             exit 1

@@ -4,17 +4,19 @@
 #
 #   curl -LsSf https://raw.githubusercontent.com/opengeneral/opengeneral/main/install.sh | sh
 #
-# Downloads the matching prebuilt binary from the latest GitHub Release, verifies
-# its checksum, and installs it to ~/.local/bin. Flags:
-#   --with-service   also run `opengeneral daemon install`
-#   --uninstall      remove the installed binary (and unregister the daemon)
+# Installs the prebuilt binary to /usr/local/bin — a system location the daemon's
+# low-privilege service account can execute (a user-home binary can't be). Uses sudo
+# for the system steps; sudo reads its password from the terminal, so this works even
+# under `curl | sh`. Flags:
+#   --with-service   also register the OS service (systemd / launchd)
+#   --uninstall      unregister the daemon and remove the binary
 #   --version=vX.Y.Z install a specific release instead of the latest
 #
 # Env overrides: INSTALL_DIR, OPENGENERAL_REPO, OPENGENERAL_VERSION.
 set -eu
 
 REPO="${OPENGENERAL_REPO:-opengeneral/opengeneral}"
-INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
+INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 VERSION="${OPENGENERAL_VERSION:-latest}"
 WITH_SERVICE=0
 DO_UNINSTALL=0
@@ -28,16 +30,28 @@ for arg in "$@"; do
   esac
 done
 
+# Root is needed to write a system dir and to manage the system service. Use sudo for
+# those steps when not already root; if the install dir is user-writable (an
+# INSTALL_DIR override for a CLI-only install) no sudo is used for the copy.
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then
+  if [ -w "$INSTALL_DIR" ] || { [ ! -e "$INSTALL_DIR" ] && [ -w "$(dirname "$INSTALL_DIR")" ]; }; then
+    SUDO=""
+  else
+    SUDO="sudo"
+  fi
+fi
+
 if [ "$DO_UNINSTALL" -eq 1 ]; then
   bin="$INSTALL_DIR/opengeneral"
   if [ -x "$bin" ]; then
-    "$bin" daemon uninstall || echo "Note: 'daemon uninstall' reported an issue; continuing."
-    rm -f "$bin"
+    $SUDO "$bin" daemon uninstall || echo "Note: 'daemon uninstall' reported an issue; continuing."
+    $SUDO rm -f "$bin"
     echo "Removed $bin"
   else
     echo "No opengeneral binary at $bin — nothing to remove."
   fi
-  echo "Config at ~/.opengeneral and keyring secrets were left intact."
+  echo "The daemon's config and secrets were left intact."
   exit 0
 fi
 
@@ -100,8 +114,8 @@ if [ "$actual" != "$expected" ]; then
   exit 1
 fi
 
-mkdir -p "$INSTALL_DIR"
-install -m 0755 "$tmp/opengeneral" "$INSTALL_DIR/opengeneral"
+$SUDO mkdir -p "$INSTALL_DIR"
+$SUDO install -m 0755 "$tmp/opengeneral" "$INSTALL_DIR/opengeneral"
 echo "Installed opengeneral to $INSTALL_DIR/opengeneral"
 
 case ":$PATH:" in
@@ -116,11 +130,13 @@ esac
 if [ "$WITH_SERVICE" -eq 1 ]; then
   echo
   echo "Registering the daemon service ..."
-  "$INSTALL_DIR/opengeneral" daemon install
+  $SUDO "$INSTALL_DIR/opengeneral" daemon install
+  echo "Start it with: sudo opengeneral daemon start"
 else
   echo
-  echo "Next steps:"
-  echo "  opengeneral keys add <name> --type anthropic"
+  echo "Next steps (the daemon runs as an OS service, so these need sudo):"
+  echo "  sudo opengeneral daemon install"
+  echo "  sudo opengeneral daemon start"
   echo "  opengeneral action-planes add default --endpoint http://127.0.0.1:4767/mcp"
-  echo "  opengeneral daemon install && opengeneral daemon start"
+  echo "  opengeneral keys add <name> --type anthropic"
 fi
