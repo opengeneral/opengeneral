@@ -43,6 +43,8 @@ echo "Building opengeneral binary with $PYTHON ..."
   --noconfirm --clean --onefile \
   --name opengeneral \
   --paths src \
+  --add-data "$REPO_ROOT/personas:personas" \
+  --add-data "$REPO_ROOT/skills:skills" \
   --distpath dist \
   --workpath build/pyinstaller \
   --specpath build/pyinstaller \

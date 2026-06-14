@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from opengeneral.config import OPENGENERAL_HOME
+from opengeneral.config import OPENGENERAL_HOME, bundled_data_dir
 from opengeneral.manifest import AgentCapabilityManifest
 
-BUNDLED_PERSONAS_DIR = Path("personas")
+BUNDLED_PERSONAS_DIR = bundled_data_dir("personas")
 USER_PERSONAS_DIR = OPENGENERAL_HOME / "personas"
 
 

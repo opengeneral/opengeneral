@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from opengeneral.config import OPENGENERAL_HOME
+from opengeneral.config import OPENGENERAL_HOME, bundled_data_dir
 
-BUNDLED_SKILLS_DIR = Path("skills")
+BUNDLED_SKILLS_DIR = bundled_data_dir("skills")
 USER_SKILLS_DIR = OPENGENERAL_HOME / "skills"
 
 

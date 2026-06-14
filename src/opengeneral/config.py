@@ -2,8 +2,23 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+
+def bundled_data_dir(name: str) -> Path:
+    """Locate a directory of files shipped with OpenGeneral (e.g. ``personas``,
+    ``skills``).
+
+    In a PyInstaller binary the data is unpacked under the bundle (``sys._MEIPASS``,
+    populated by ``--add-data``); from source it lives at the repo root. Always an
+    absolute path, so resolution never depends on the current working directory.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / name  # type: ignore[attr-defined]
+    return Path(__file__).resolve().parents[2] / name
+
 
 OPENGENERAL_HOME = Path(os.environ.get("OPENGENERAL_HOME", "~/.opengeneral")).expanduser()
 DEFAULT_ACTION_PLANES_CONFIG_PATH = Path(

@@ -46,6 +46,8 @@ Write-Host "Building opengeneral.exe with $Python ..."
   --noconfirm --clean --onefile `
   --name opengeneral `
   --paths src `
+  --add-data "$RepoRoot\personas;personas" `
+  --add-data "$RepoRoot\skills;skills" `
   --distpath dist `
   --workpath build\pyinstaller `
   --specpath build\pyinstaller `

@@ -2,22 +2,12 @@
 
 Runs against a real service-managed daemon (see conftest `service`), so it proves
 the binary works the way most users run it — installed, with the daemon supervised
-by the OS service manager rather than launched by hand.
-
-One documented known-failure rides along:
-  * spawn/talk — the binary loads default personas/skills via a relative path and
-    bundles no data files, so spawn finds no persona; xfail on every OS until that
-    bundling gap is fixed.
-
-The service path runs for real on all three OSes, including Windows (a dedicated tiny
-host binary, opengeneral-svc.exe, hosts the SCM dispatcher and supervises the daemon).
+by the OS service manager rather than launched by hand. The default personas/skills
+are bundled into the binary, so spawning the `coder` persona works through the
+service on every OS.
 """
 
 from __future__ import annotations
-
-import pytest
-
-BUNDLING_GAP = "binary does not bundle personas/skills (relative Path); fix deferred"
 
 
 def test_service_reports_running(service) -> None:
@@ -50,7 +40,6 @@ def test_keys_are_managed_by_the_service(service) -> None:
         service.rpc("keys.remove", {"name": "svc-managed"})
 
 
-@pytest.mark.xfail(reason=BUNDLING_GAP, strict=False)
 def test_spawn_and_talk_via_service(service) -> None:
     # Keys + action planes are daemon-owned; register them through the service daemon
     # (a static key needs no keyring secret and yields the StaticChatProvider). This is
