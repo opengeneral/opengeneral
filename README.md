@@ -202,3 +202,14 @@ opengeneral talk coder
 ```bash
 pytest
 ```
+
+## Security model
+
+OpenGeneral separates the cognitive plane (this runtime) from the action plane: an agent's environment-changing actions go through the Action Plane (MCP), which authenticates the agent identity and enforces policy — so the daemon's OS privileges do not gate what an agent can do to your environment.
+
+The daemon itself is a long-running local service, with two boundaries to be aware of:
+
+- **The control channel — the localhost RPC on `127.0.0.1:4777` — is not authenticated.** Any process on the machine can drive it (spawn agents, add/remove keys and action planes). Filesystem isolation still applies — the daemon's config and secrets are readable only by its service account and administrators — but the RPC is open to local callers.
+- **Secrets at rest are protected from other *non-admin* users** (an OS keyring scoped to the service account, or a `0600` file), **but not from a local administrator/root.** An always-on, unattended daemon has to read its own secrets with no human present, so anyone with full control of the machine can too. This is inherent to any background service that holds usable credentials.
+
+**Current assumption:** treat **any local administrator/root as having full access** to OpenGeneral — its RPC, config, and secrets. Run it on machines whose local administrators you trust (ideally a personal machine where you are the only admin, or a dedicated user/VM). Authenticating the RPC is deferred future work, not yet implemented.
