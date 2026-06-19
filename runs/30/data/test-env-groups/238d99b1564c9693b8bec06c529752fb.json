@@ -1,0 +1,1 @@
+{"id":"238d99b1564c9693b8bec06c529752fb","fullName":"tests.test_providers_litellm#test_complete_sends_tools_and_parses_tool_calls","name":"test_complete_sends_tools_and_parses_tool_calls","status":"passed","testResultsByEnv":{"default":"03d5148f4cb25600c8c192c39dd15b99"}}

@@ -1,0 +1,1 @@
+{"id":"c4174e5ee51f71b56964e1983268fc07","fullName":"tests.test_service_systemd#test_install_rolls_back_when_enable_fails","name":"test_install_rolls_back_when_enable_fails","status":"passed","testResultsByEnv":{"default":"e92abbb1e233b1151b2e43090674b796"}}
