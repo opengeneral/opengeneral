@@ -12,6 +12,7 @@ from opengeneral.config import (
     KeyConfig,
     KeysConfig,
 )
+from opengeneral.action_plane import EmptyActionPlaneConnector
 from opengeneral.daemon import AgentManager, OpenGeneralDaemon
 
 
@@ -50,7 +51,7 @@ async def test_agent_manager_spawns_running_agent(isolated_configs: None) -> Non
 
 
 async def test_agent_manager_routes_messages_to_running_agent(isolated_configs: None) -> None:
-    manager = AgentManager()
+    manager = AgentManager(EmptyActionPlaneConnector())
     await manager.spawn(
         AgentConfig("coder", "coder-abc123", "coder", "default", "local-test", "test")
     )

@@ -23,10 +23,10 @@ if ($LASTEXITCODE -ne 0) {
   exit 1
 }
 
-# litellm, keyring and tiktoken pull in data files and lazy/plugin imports that
-# PyInstaller's static analysis misses. collect-all bundles them wholesale; only
+# litellm, mcp, keyring and tiktoken pull in data files and lazy/plugin imports
+# that PyInstaller's static analysis misses. collect-all bundles them wholesale; only
 # request packages that are actually importable so the build degrades gracefully.
-$collectPkgs = @('litellm', 'keyring', 'tiktoken')
+$collectPkgs = @('litellm', 'mcp', 'keyring', 'tiktoken')
 $collectArgs = @()
 foreach ($pkg in $collectPkgs) {
   & $Python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('$pkg') else 1)" 2>$null

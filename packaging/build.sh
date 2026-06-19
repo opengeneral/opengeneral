@@ -18,11 +18,11 @@ if ! "$PYTHON" -c "import PyInstaller" >/dev/null 2>&1; then
   exit 1
 fi
 
-# litellm, keyring and tiktoken pull in data files and lazy/plugin imports that
-# PyInstaller's static analysis misses. collect-all bundles them wholesale.
+# litellm, mcp, keyring and tiktoken pull in data files and lazy/plugin imports
+# that PyInstaller's static analysis misses. collect-all bundles them wholesale.
 # Only request packages that are actually importable so the build degrades
 # gracefully (e.g. a core-only build without the provider extra installed).
-COLLECT_PKGS=(litellm keyring tiktoken)
+COLLECT_PKGS=(litellm mcp keyring tiktoken)
 COLLECT_ARGS=()
 for pkg in "${COLLECT_PKGS[@]}"; do
   if "$PYTHON" -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('$pkg') else 1)" >/dev/null 2>&1; then

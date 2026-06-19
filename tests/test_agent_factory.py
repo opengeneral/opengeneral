@@ -19,7 +19,6 @@ def persona() -> AgentPersona:
 def test_create_agent_requires_runtime_agent_name() -> None:
     runtime = AgentRuntime(
         manifest=persona().manifest,
-        clients={},
         action_plane="default",
         identity="tester-abc123",
     )
@@ -31,7 +30,6 @@ def test_create_agent_requires_runtime_agent_name() -> None:
 def test_create_agent_uses_runtime_agent_name_in_prompt() -> None:
     runtime = AgentRuntime(
         manifest=persona().manifest,
-        clients={},
         action_plane="default",
         identity="tester-abc123",
         agent_name="friendly-name",

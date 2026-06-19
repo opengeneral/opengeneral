@@ -11,7 +11,7 @@ from typing import Any
 
 CONFIG_ERROR_EXIT_CODE = 78
 
-from opengeneral.action_plane import ActionPlaneConnector, EmptyActionPlaneConnector
+from opengeneral.action_plane import ActionPlaneConnector, MCPActionPlaneConnector
 from opengeneral.agent import GeneralPurposeAgent
 from opengeneral.agent_factory import create_agent
 from opengeneral.config import (
@@ -47,7 +47,7 @@ class RunningAgent:
 
 class AgentManager:
     def __init__(self, connector: ActionPlaneConnector | None = None) -> None:
-        self.connector = connector or EmptyActionPlaneConnector()
+        self.connector = connector or MCPActionPlaneConnector()
         self.agents: dict[str, RunningAgent] = {}
 
     async def load_existing(self) -> None:
@@ -72,10 +72,12 @@ class AgentManager:
             raise ValueError(f"Action plane not found: {config.action_plane}")
 
         persona = PersonaRegistry().load(config.persona_tag)
-        clients = await self.connector.connect(action_plane.endpoint, config.agent_id)
+        # The Action Plane is connected lazily, per agent turn (see GeneralPurposeAgent),
+        # not held open at spawn — so spawning never depends on the Action Plane being up.
         runtime = AgentRuntime(
             manifest=persona.manifest,
-            clients=clients,
+            connector=self.connector,
+            endpoint=action_plane.endpoint,
             action_plane=action_plane.name,
             identity=config.agent_id,
             agent_name=config.name,

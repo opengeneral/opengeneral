@@ -1,22 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from contextlib import asynccontextmanager
 from typing import Any
 
+from opengeneral.action_plane import EmptyActionPlaneConnector
 from opengeneral.manifest import AgentCapabilityManifest
-from opengeneral.mcp import MCPToolCall, MCPToolResult
+from opengeneral.mcp import MCPToolResult
+from opengeneral.providers import ToolSpec
 from opengeneral.runtime import AgentRuntime
-
-
-@dataclass(frozen=True)
-class FakeMCPClient:
-    server_id: str
-
-    async def list_tools(self) -> list[str]:
-        return ["echo"]
-
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> MCPToolResult:
-        return MCPToolResult({"name": name, "arguments": arguments})
 
 
 def manifest(capabilities: list[dict[str, Any]] | None = None) -> AgentCapabilityManifest:
@@ -25,48 +16,42 @@ def manifest(capabilities: list[dict[str, Any]] | None = None) -> AgentCapabilit
     )
 
 
-async def test_runtime_does_not_gate_declared_capabilities_on_action_identity() -> None:
-    runtime = AgentRuntime(
-        manifest=manifest(
-            [
-                {
-                    "id": "files_editing",
-                    "description": "Can inspect and modify files in the workspace.",
-                }
-            ]
-        ),
-        clients={},
-        action_plane=None,
-        identity=None,
-    )
+class FakeSession:
+    async def list_tools(self) -> list[ToolSpec]:
+        return [ToolSpec("echo", "Echo input", {"type": "object"})]
 
-    assert await runtime.list_available_tools() == {}
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> MCPToolResult:
+        return MCPToolResult({"name": name, "arguments": arguments})
 
 
-async def test_runtime_routes_tool_calls_to_mcp_client() -> None:
-    client = FakeMCPClient("local-filesystem")
+class RecordingConnector:
+    def __init__(self) -> None:
+        self.opened_with: tuple[str, str | None] | None = None
+
+    @asynccontextmanager
+    async def session(self, endpoint: str, identity: str | None):
+        self.opened_with = (endpoint, identity)
+        yield FakeSession()
+
+
+async def test_runtime_yields_empty_session_without_action_plane() -> None:
+    runtime = AgentRuntime(manifest=manifest(), connector=EmptyActionPlaneConnector())
+
+    async with runtime.action_plane_session() as session:
+        assert await session.list_tools() == []
+
+
+async def test_runtime_opens_session_via_connector_with_endpoint_and_identity() -> None:
+    connector = RecordingConnector()
     runtime = AgentRuntime(
         manifest=manifest(),
-        clients={client.server_id: client},
-        action_plane=None,
-        identity=None,
+        connector=connector,
+        endpoint="http://127.0.0.1:4767/mcp",
+        identity="coder-abc123",
     )
 
-    result = await runtime.call_tool(
-        MCPToolCall(client.server_id, "echo", {"input": "hello"})
-    )
+    async with runtime.action_plane_session() as session:
+        tools = await session.list_tools()
 
-    assert result == MCPToolResult(
-        {"name": "echo", "arguments": {"input": "hello"}}
-    )
-
-
-async def test_runtime_reports_unavailable_server_as_mcp_error() -> None:
-    runtime = AgentRuntime(manifest=manifest(), clients={}, action_plane=None, identity=None)
-
-    result = await runtime.call_tool(
-        MCPToolCall("local-shell", "run", {"input": "pwd"})
-    )
-
-    assert result.is_error is True
-    assert result.error_code == "SERVER_UNAVAILABLE"
+    assert connector.opened_with == ("http://127.0.0.1:4767/mcp", "coder-abc123")
+    assert [tool.name for tool in tools] == ["echo"]

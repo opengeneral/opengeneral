@@ -197,6 +197,18 @@ The generated ID is also the Action Plane identity. The Action Plane remains res
 opengeneral talk coder
 ```
 
+Each turn runs a real agent loop: the model can call tools exposed by the agent's
+Action Plane, OpenGeneral executes them over MCP, feeds the results back, and
+repeats until the model produces a final answer. Conversation history is kept by
+the daemon for the life of the agent, so context carries across turns. `/tools`
+lists the tools the Action Plane currently exposes and `/skills` lists the persona's
+loaded skills.
+
+When OpenGeneral connects to the Action Plane it asserts the agent's generated ID in
+the `X-OpenGeneral-Agent-Id` header; the Action Plane is responsible for verifying it
+and enforcing policy. If the Action Plane is unreachable, the agent still answers
+from the model — just without tools for that turn.
+
 ### 7. Run tests
 
 ```bash
