@@ -1,0 +1,1 @@
+{"id":"28fade694729ffebb025006a926c0ae3","fullName":"tests.test_service_launchd#test_install_restores_previous_plist_when_bootstrap_fails","name":"test_install_restores_previous_plist_when_bootstrap_fails","status":"passed","testResultsByEnv":{"default":"5647822ab9d14f1a1727cf73ae0463be"}}
