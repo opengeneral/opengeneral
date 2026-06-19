@@ -10,6 +10,14 @@ DEFAULT_DAEMON_HOST = os.environ.get("OPENGENERAL_DAEMON_HOST", "127.0.0.1")
 DEFAULT_DAEMON_PORT = int(os.environ.get("OPENGENERAL_DAEMON_PORT", "4777"))
 DAEMON_NOT_RUNNING = "OpenGeneral daemon is not running. Start it with: opengeneral daemon start"
 
+# Connecting to a live daemon is near-instant, so a short connect timeout fails
+# fast when it isn't running. Reading the response is a different matter: most RPCs
+# answer immediately, but an agent turn (agent.message) runs the model and tool
+# calls, which legitimately takes many seconds — so it gets a generous read timeout.
+_CONNECT_TIMEOUT = 2.0
+_DEFAULT_READ_TIMEOUT = 15.0
+_AGENT_TURN_READ_TIMEOUT = 600.0
+
 
 class DaemonUnavailableError(RuntimeError):
     pass
@@ -24,10 +32,18 @@ class DaemonClient:
         self.host = host
         self.port = port
 
-    def request(self, method: str, params: dict[str, Any] | None = None) -> Any:
+    def request(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        read_timeout: float = _DEFAULT_READ_TIMEOUT,
+    ) -> Any:
         request = {"id": uuid4().hex, "method": method, "params": params or {}}
         try:
-            with socket.create_connection((self.host, self.port), timeout=2) as client:
+            with socket.create_connection((self.host, self.port), timeout=_CONNECT_TIMEOUT) as client:
+                # create_connection's timeout also bounds reads; widen it for the
+                # response so a slow (but alive) daemon isn't mistaken for a dead one.
+                client.settimeout(read_timeout)
                 reader = client.makefile("rwb")
                 reader.write(json.dumps(request).encode("utf-8") + b"\n")
                 reader.flush()
@@ -68,6 +84,7 @@ class DaemonClient:
         return self.request(
             "agent.message",
             {"name": name, "content": content, "source": "chat"},
+            read_timeout=_AGENT_TURN_READ_TIMEOUT,
         )
 
     def list_personas(self) -> Any:

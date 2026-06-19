@@ -10,6 +10,10 @@ from opengeneral.providers import ToolSpec
 # connection via this header. The Action Plane is responsible for verifying it.
 IDENTITY_HEADER = "X-OpenGeneral-Agent-Id"
 
+# Keep the connect/HTTP timeout short so an unreachable Action Plane degrades to a
+# no-tools turn quickly instead of stalling the whole agent response.
+_CONNECT_TIMEOUT_SECONDS = 5.0
+
 
 class ActionPlaneConnector(Protocol):
     def session(self, endpoint: str, identity: str | None) -> Any:
@@ -34,7 +38,9 @@ class MCPActionPlaneConnector:
         from mcp.client.streamable_http import streamablehttp_client
 
         headers = {IDENTITY_HEADER: identity} if identity else None
-        async with streamablehttp_client(endpoint, headers=headers) as (read, write, _):
+        async with streamablehttp_client(
+            endpoint, headers=headers, timeout=_CONNECT_TIMEOUT_SECONDS
+        ) as (read, write, _):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 yield _MCPClientSession(session)
