@@ -1,0 +1,14 @@
+Downloading opengeneral (latest) ...
+Installed opengeneral to C:\Users\runneradmin\AppData\Local\Temp\ogtest-e1c651ab-c0fc-4d16-9a36-4cd02d561e53\bin\opengeneral.exe
+Added C:\Users\runneradmin\AppData\Local\Temp\ogtest-e1c651ab-c0fc-4d16-9a36-4cd02d561e53\bin to the system PATH (restart your shell to pick it up).
+
+Next steps:
+  opengeneral daemon install
+  opengeneral daemon start
+  opengeneral action-planes add default --endpoint http://127.0.0.1:4767/mcp
+  opengeneral keys add <name> --type anthropic
+ok: install (both binaries) + --help
+Downloading opengeneral (latest) ...
+ok: checksum mismatch rejected
+All Windows installer checks passed.
+

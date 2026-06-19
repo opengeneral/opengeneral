@@ -1,0 +1,1 @@
+{"id":"79f6b867af1d0ffc59c400860da3d7e7","fullName":"tests.test_service_systemd#test_uninstall_removes_unit_and_disables","name":"test_uninstall_removes_unit_and_disables","status":"passed","testResultsByEnv":{"default":"49c31c50fc19e466b3cde24504fd5f62"}}
