@@ -40,6 +40,16 @@ def test_keys_are_managed_by_the_service(service) -> None:
         service.rpc("keys.remove", {"name": "svc-managed"})
 
 
+def test_personas_list_via_service(service) -> None:
+    # Personas are resolved by the daemon (single source of truth), so `personas list`
+    # exercises the persona RPC against the service-managed daemon and proves the
+    # bundled defaults are found from the binary's own bundle.
+    listed = service.cli("personas", "list")
+    assert listed.returncode == 0, listed.stdout + listed.stderr
+    assert "coder" in listed.stdout
+    assert "minimal" in listed.stdout
+
+
 def test_spawn_and_talk_via_service(service) -> None:
     # Keys + action planes are daemon-owned; register them through the service daemon
     # (a static key needs no keyring secret and yields the StaticChatProvider). This is

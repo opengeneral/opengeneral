@@ -2,13 +2,14 @@
 
 The defaults (`coder`, `minimal`, and the standard skills) are bundled into the
 binary via `--add-data` and resolved through `sys._MEIPASS`, so an installed binary
-finds them from any working directory.
+finds them from any working directory. Personas are resolved by the daemon (the
+single source of truth), so `personas list` talks to a running daemon.
 """
 
 from __future__ import annotations
 
 
-def test_personas_list_shows_defaults(run) -> None:
+def test_personas_list_shows_defaults(daemon, run) -> None:
     result = run("personas", "list")
     assert result.returncode == 0
     assert "coder" in result.stdout

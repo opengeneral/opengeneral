@@ -76,6 +76,27 @@ async def test_agent_manager_reports_missing_key(isolated_configs: None) -> None
         )
 
 
+def test_agent_manager_lists_bundled_personas() -> None:
+    personas = AgentManager().list_personas()
+
+    tags = {persona["tag"] for persona in personas}
+    assert {"coder", "minimal"} <= tags
+    assert all(persona["description"] for persona in personas)
+
+
+def test_agent_manager_shows_persona_with_capabilities() -> None:
+    persona = AgentManager().show_persona("coder")
+
+    assert persona["tag"] == "coder"
+    assert persona["agent_id"]
+    assert isinstance(persona["capabilities"], list)
+
+
+def test_agent_manager_reports_unknown_persona() -> None:
+    with pytest.raises(ValueError, match="unknown persona: missing"):
+        AgentManager().show_persona("missing")
+
+
 def test_request_shutdown_before_serve_does_not_deadlock() -> None:
     """Shutdown requested before serve_forever should make serve_forever a no-op
     instead of blocking on the never-initialized shutdown event."""

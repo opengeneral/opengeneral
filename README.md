@@ -118,7 +118,7 @@ On Linux/macOS a `Makefile` wraps the common tasks — run `make help` to list t
 
 ### 2. Install and start the daemon
 
-The daemon owns all runtime state — agents, API keys, and Action Plane endpoints. It runs as a **least-privilege system service** (boot-started, survives logout), so install and start it with root/admin first; the `keys` and `action-planes` commands below are thin clients that talk to it.
+The daemon owns all runtime state — personas, agents, API keys, and Action Plane endpoints. It runs as a **least-privilege system service** (boot-started, survives logout), so install and start it with root/admin first; the `personas`, `keys`, and `action-planes` commands below are thin clients that talk to it.
 
 ```bash
 sudo opengeneral daemon install   # in an Administrator PowerShell on Windows (no sudo)

@@ -11,7 +11,6 @@ from typing_extensions import Annotated
 from opengeneral import service
 from opengeneral.config import DEFAULT_ACTION_PLANE, SUPPORTED_PROVIDER_TYPES
 from opengeneral.daemon_client import DAEMON_NOT_RUNNING, DaemonClient, DaemonUnavailableError
-from opengeneral.personas import PersonaNotFoundError, PersonaRegistry
 from opengeneral.runner import AgentChatRunner
 
 
@@ -81,12 +80,12 @@ def start_agent(
     model: str | None,
     agent_name: str | None,
 ) -> str:
-    persona = PersonaRegistry().load(persona_tag)
     if agent_name is None:
-        return f"Agent name is required. Use: opengeneral spawn --persona {persona.tag} --name <name>"
+        return f"Agent name is required. Use: opengeneral spawn --persona {persona_tag} --name <name>"
 
-    # The daemon owns keys/action-planes/agents and validates them on spawn (raising
-    # "Action plane not found" / "Key not found" / "Agent already exists" as needed).
+    # The daemon owns personas/keys/action-planes/agents and validates them on spawn
+    # (raising "unknown persona" / "Action plane not found" / "Key not found" /
+    # "Agent already exists" as needed).
     client = DaemonClient()
     if key is None:
         provider_type = choose_provider_type()
@@ -97,7 +96,7 @@ def start_agent(
         return "Model is required."
 
     result = client.spawn_agent(
-        agent_name, persona.tag, action_plane, key, model, create_agent_id(persona.tag)
+        agent_name, persona_tag, action_plane, key, model, create_agent_id(persona_tag)
     )
     return (
         f"Spawned agent {result['name']} ({result['id']}) from persona "
@@ -141,20 +140,20 @@ def remove_agent(name: str) -> str:
 
 
 def render_personas() -> str:
-    personas = PersonaRegistry().list_personas()
+    personas = DaemonClient().list_personas()
     if not personas:
         return "No personas found."
-    return "\n".join(f"{persona.tag}\t{persona.description}" for persona in personas)
+    return "\n".join(f"{persona['tag']}\t{persona['description']}" for persona in personas)
 
 
 def render_persona(persona_tag: str) -> str:
-    persona = PersonaRegistry().load(persona_tag)
-    lines = [f"Persona: {persona.tag}", f"Agent ID: {persona.manifest.agent_id}", ""]
+    persona = DaemonClient().show_persona(persona_tag)
+    lines = [f"Persona: {persona['tag']}", f"Agent ID: {persona['agent_id']}", ""]
     lines.append("Declared capabilities:")
-    if not persona.manifest.capabilities:
+    if not persona["capabilities"]:
         lines.append("  (none)")
-    for capability in persona.manifest.capabilities:
-        lines.append(f"  {capability.capability_id}  {capability.description}")
+    for capability in persona["capabilities"]:
+        lines.append(f"  {capability['capability_id']}  {capability['description']}")
     return "\n".join(lines)
 
 
@@ -244,9 +243,6 @@ def _run(func: Callable[..., str], *args: object, **kwargs: object) -> None:
             typer.echo(result)
     except DaemonUnavailableError:
         typer.echo(DAEMON_NOT_RUNNING)
-        raise typer.Exit(1)
-    except PersonaNotFoundError as error:
-        typer.echo(f"Persona not found: {error.tag}")
         raise typer.Exit(1)
     except (ValueError, RuntimeError) as error:
         typer.echo(str(error))

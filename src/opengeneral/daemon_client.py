@@ -70,6 +70,12 @@ class DaemonClient:
             {"name": name, "content": content, "source": "chat"},
         )
 
+    def list_personas(self) -> Any:
+        return self.request("personas.list")
+
+    def show_persona(self, tag: str) -> Any:
+        return self.request("personas.show", {"tag": tag})
+
     def add_key(self, name: str, provider_type: str, base_url: str | None, secret: str) -> Any:
         return self.request(
             "keys.add",

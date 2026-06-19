@@ -143,6 +143,28 @@ class AgentManager:
     def status(self) -> dict[str, Any]:
         return {"status": "running", "agents": len(self.agents)}
 
+    # --- Personas: resolved by the daemon so it is the single source of truth
+    # (bundled defaults today; daemon-owned custom personas later). The CLI is a
+    # thin client and never reads the persona files itself.
+
+    def list_personas(self) -> list[dict[str, str]]:
+        return [
+            {"tag": persona.tag, "description": persona.description}
+            for persona in PersonaRegistry().list_personas()
+        ]
+
+    def show_persona(self, tag: str) -> dict[str, Any]:
+        persona = PersonaRegistry().load(tag)
+        return {
+            "tag": persona.tag,
+            "description": persona.description,
+            "agent_id": persona.manifest.agent_id,
+            "capabilities": [
+                {"capability_id": cap.capability_id, "description": cap.description}
+                for cap in persona.manifest.capabilities
+            ],
+        }
+
     # --- Keys: daemon-owned so the secret is written and read by the same principal
     # (the daemon). Metadata lives in keys.json; the secret in the daemon's keyring.
     # Secrets are inbound-only — there is deliberately no "get secret" method.
@@ -309,6 +331,10 @@ class OpenGeneralDaemon(socketserver.ThreadingTCPServer):
             return self.manager.show_key(params["name"])
         if method == "keys.remove":
             return self.manager.remove_key(params["name"])
+        if method == "personas.list":
+            return self.manager.list_personas()
+        if method == "personas.show":
+            return self.manager.show_persona(params["tag"])
         if method == "action_planes.add":
             return self.manager.add_action_plane(params["name"], params["endpoint"])
         if method == "action_planes.list":

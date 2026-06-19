@@ -4,9 +4,9 @@ The binary is resolved by the shared `binary` fixture (tests/conftest.py): it us
 $OPENGENERAL_BINARY, else the default build output dist/opengeneral[.exe], and skips
 when neither exists. So `./packaging/build.sh && pytest` runs these automatically.
 Each test gets an isolated OPENGENERAL_HOME and a free daemon port, and the binary
-runs with cwd set to a scratch dir — important, because the default personas/skills
-are loaded via a relative `Path("personas")`, so running from the repo root would
-mask the (intentional, documented) bundling gap.
+runs with cwd set to a scratch dir — important, because it proves the bundled
+personas/skills are resolved from the binary's own bundle (`sys._MEIPASS`), not from
+a `personas/`/`skills/` dir that happens to sit in the working directory.
 """
 
 from __future__ import annotations
