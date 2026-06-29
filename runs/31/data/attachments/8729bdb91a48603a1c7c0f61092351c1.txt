@@ -1,0 +1,7 @@
+[31;1mCopy-Item: [0mD:\a\opengeneral\opengeneral\tests\installer\run_install.ps1:42[0m
+[31;1m[0m[36;1mLine |[0m
+[31;1m[0m[36;1m[36;1m  42 | [0m     [36;1mCopy-Item (Join-Path $rel (Split-Path $Uri -Leaf)) $OutFile[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mCannot find path[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m[31;1m[36;1m     | [31;1m'C:\Users\runneradmin\AppData\Local\Temp\ogtest-68eae793-f84a-4150-b68b-3b9b241cb8b4\release\opengeneral-tui-windows-x86_64.exe' because it does not exist.[0m
+

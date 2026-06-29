@@ -1,0 +1,2 @@
+curl: 404 https://github.com/opengeneral/opengeneral/releases/latest/download/opengeneral-tui-macos-arm64
+
