@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
@@ -58,7 +59,42 @@ async def test_agent_manager_routes_messages_to_running_agent(isolated_configs: 
 
     result = await manager.send_message("coder", "hello")
 
-    assert result == {"messages": ["I'm ready to work on that."]}
+    assert result["messages"] == ["I'm ready to work on that."]
+    assert result["tools_used"] == []
+
+
+async def test_agent_manager_reports_wiring_for_running_agent(isolated_configs: None) -> None:
+    manager = AgentManager(EmptyActionPlaneConnector())
+    await manager.spawn(
+        AgentConfig("coder", "coder-abc123", "coder", "default", "local-test", "test")
+    )
+
+    wiring = await manager.wiring("coder")
+
+    assert wiring["agent"]["id"] == "coder-abc123"
+    assert wiring["action_plane"]["name"] == "default"
+    assert wiring["action_plane"]["endpoint"] == "http://127.0.0.1:4767/mcp"
+    # The empty connector yields a reachable session that exposes no tools.
+    assert wiring["action_plane"]["reachable"] is True
+    assert wiring["tools"] == []
+
+
+async def test_agent_manager_wiring_reports_unreachable_action_plane(isolated_configs: None) -> None:
+    class _DeadConnector:
+        @asynccontextmanager
+        async def session(self, endpoint, identity):
+            raise ConnectionError("down")
+            yield  # pragma: no cover
+
+    manager = AgentManager(_DeadConnector())
+    await manager.spawn(
+        AgentConfig("coder", "coder-abc123", "coder", "default", "local-test", "test")
+    )
+
+    wiring = await manager.wiring("coder")
+
+    assert wiring["action_plane"]["reachable"] is False
+    assert wiring["tools"] == []
 
 
 async def test_agent_manager_reports_unknown_agent(isolated_configs: None) -> None:

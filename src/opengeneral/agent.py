@@ -27,6 +27,9 @@ class GeneralPurposeAgent:
     # Per-agent conversation memory, accumulated across turns (the daemon keeps one
     # GeneralPurposeAgent per running agent, so history persists for the agent's life).
     history: list[ChatMessage] = field(default_factory=list)
+    # Names of the tools invoked during the most recent turn — surfaced so a UI can
+    # highlight which agent->tool edges fired. Reset at the start of each turn.
+    last_tools_used: list[str] = field(default_factory=list)
     max_iterations: int = _DEFAULT_MAX_ITERATIONS
 
     async def respond(self, message: str) -> str:
@@ -38,6 +41,7 @@ class GeneralPurposeAgent:
         if not request:
             return _EMPTY_PROMPT_HINT
 
+        self.last_tools_used.clear()
         self.history.append(ChatMessage("user", request))
         async with AsyncExitStack() as stack:
             session = await self._enter_session(stack)
@@ -58,6 +62,7 @@ class GeneralPurposeAgent:
                     ChatMessage("assistant", response.content, tool_calls=response.tool_calls)
                 )
                 for call in response.tool_calls:
+                    self.last_tools_used.append(call.name)
                     rendered = await self._invoke_tool(session, call)
                     self.history.append(
                         ChatMessage("tool", rendered, tool_call_id=call.id)

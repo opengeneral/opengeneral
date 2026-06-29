@@ -99,13 +99,17 @@ class AgentManager:
         self.agents[config.name] = running
         return running
 
-    async def send_message(self, name: str, content: str) -> dict[str, list[str]]:
+    async def send_message(self, name: str, content: str) -> dict[str, Any]:
         running = self.agents.get(name)
         if running is None:
             raise ValueError(f"Agent not found: {name}")
         try:
             running.status = "processing"
-            return {"messages": [await running.agent.respond(content)]}
+            message = await running.agent.respond(content)
+            return {
+                "messages": [message],
+                "tools_used": list(running.agent.last_tools_used),
+            }
         except Exception as error:
             running.status = "error"
             running.last_error = str(error)
@@ -113,6 +117,32 @@ class AgentManager:
         finally:
             if running.status != "error":
                 running.status = "idle"
+
+    async def wiring(self, name: str) -> dict[str, Any]:
+        """The agent's live topology for visualization: agent -> action plane -> tools."""
+        running = self.agents.get(name)
+        if running is None:
+            raise ValueError(f"Agent not found: {name}")
+        tools: list[dict[str, str]] = []
+        reachable = False
+        try:
+            async with running.runtime.action_plane_session() as session:
+                tools = [
+                    {"name": spec.name, "description": spec.description}
+                    for spec in await session.list_tools()
+                ]
+                reachable = True
+        except Exception:
+            reachable = False
+        return {
+            "agent": self.get_agent(name),
+            "action_plane": {
+                "name": running.action_plane.name,
+                "endpoint": running.action_plane.endpoint,
+                "reachable": reachable,
+            },
+            "tools": tools,
+        }
 
     def list_agents(self) -> list[dict[str, str | None]]:
         return [self.get_agent(name) for name in sorted(self.agents)]
@@ -323,6 +353,8 @@ class OpenGeneralDaemon(socketserver.ThreadingTCPServer):
             return self.manager.remove_agent(params["name"])
         if method == "agent.message":
             return asyncio.run(self.manager.send_message(params["name"], params["content"]))
+        if method == "agent.wiring":
+            return asyncio.run(self.manager.wiring(params["name"]))
         if method == "keys.add":
             return self.manager.add_key(
                 params["name"], params["type"], params.get("base_url"), params.get("secret", "")
