@@ -55,8 +55,11 @@ Windows) via `collect_ignore`, so the others don't carry it as a skipped row;
 `systemctl`/`launchctl`/`win32serviceutil` are mocked.
 
 ### `build`
-Installs `.[build]`, builds the binary (`packaging/build.sh` / `build.ps1`), and
-**uploads it as the `binary-<os>` artifact**. No tests run here — that's the point.
+Installs `.[build]`, builds the binary (`packaging/build.sh` / `build.ps1`), then
+builds and unit-tests the Rust `opengeneral-tui` console (`cargo test`/`cargo build
+--release`, using the runner's preinstalled Rust toolchain) and stages it next to the
+Python binary. **Uploads them as the `binary-<os>` artifact.** No Python tests run
+here — that's the point.
 
 ### `e2e`
 Downloads the `binary-<os>` artifact onto a fresh runner and installs **only the
@@ -66,8 +69,11 @@ test runner** (`pytest allure-pytest keyring`) — deliberately *not* `pip insta
 1. **Install (the "install script" stage):** runs the real `install.sh` /
    `install.ps1`, fed an *offline fake release* built from the artifact (the
    installer pulls from Releases `latest`, which wouldn't match this commit). The
-   binary lands in a **system location** the low-priv service account can exec —
-   `/usr/local/bin` on Unix, `%ProgramFiles%\OpenGeneral` on Windows.
+   binaries (the CLI/daemon and the `opengeneral-tui` console) land in a **system
+   location** the low-priv service account can exec — `/usr/local/bin` on Unix,
+   `%ProgramFiles%\OpenGeneral` on Windows. A `opengeneral-tui --help` smoke then
+   confirms the installed TUI runs (the full-screen UI needs a TTY, so CI only smokes
+   `--help`).
 2. **Binary + installer suites (no service):** `pytest tests/integration
    tests/installer` — the secondary `--no-service` path. `tests/integration` drives
    a **foreground** daemon (isolated port + `OPENGENERAL_HOME`); `tests/installer`

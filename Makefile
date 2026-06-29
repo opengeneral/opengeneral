@@ -7,7 +7,7 @@ INSTALL_DIR ?= $(HOME)/.local/bin
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev test build install-bin uninstall-bin clean
+.PHONY: help install dev test build build-tui install-bin uninstall-bin clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) \
@@ -26,17 +26,22 @@ test: ## Run the test suite
 build: ## Build the standalone binary into dist/ (PyInstaller)
 	PYTHON=$(PYTHON) ./packaging/build.sh
 
-install-bin: build ## Build and install the local binary onto your PATH
+build-tui: ## Build the connection-visualization TUI (Rust) into tui/target/release
+	cargo build --release --manifest-path tui/Cargo.toml
+
+install-bin: build build-tui ## Build and install the local binaries onto your PATH
 	mkdir -p $(INSTALL_DIR)
 	install -m 0755 dist/opengeneral $(INSTALL_DIR)/opengeneral
-	@echo "Installed dist/opengeneral to $(INSTALL_DIR)/opengeneral"
+	install -m 0755 tui/target/release/opengeneral-tui $(INSTALL_DIR)/opengeneral-tui
+	@echo "Installed opengeneral and opengeneral-tui to $(INSTALL_DIR)"
 
-uninstall-bin: ## Unregister the daemon and remove the locally-installed binary
+uninstall-bin: ## Unregister the daemon and remove the locally-installed binaries
 	-$(INSTALL_DIR)/opengeneral daemon uninstall
-	rm -f $(INSTALL_DIR)/opengeneral
-	@echo "Removed $(INSTALL_DIR)/opengeneral"
+	rm -f $(INSTALL_DIR)/opengeneral $(INSTALL_DIR)/opengeneral-tui
+	@echo "Removed opengeneral and opengeneral-tui from $(INSTALL_DIR)"
 
 clean: ## Remove build artifacts
 	rm -rf build dist
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 	rm -rf .pytest_cache
+	cargo clean --manifest-path tui/Cargo.toml 2>/dev/null || true

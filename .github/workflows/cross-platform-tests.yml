@@ -66,8 +66,25 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./packaging/build.ps1
-      # The built binary is the only artifact the e2e job consumes. Testing it on a
-      # fresh runner — without the build toolchain, source tree, or dev deps — is the
+
+      # The TUI is a separate Rust binary (a pure JSON-RPC client of the daemon).
+      # GitHub runners ship a Rust toolchain, so just build + test it here.
+      - name: Build & test the TUI (Rust)
+        shell: bash
+        run: |
+          cargo test --release --manifest-path tui/Cargo.toml
+          cargo build --release --manifest-path tui/Cargo.toml
+      - name: Stage the TUI binary (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: cp tui/target/release/opengeneral-tui dist/
+      - name: Stage the TUI binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Copy-Item tui/target/release/opengeneral-tui.exe dist/
+
+      # The built binaries are the only artifact the e2e job consumes. Testing them on
+      # a fresh runner — without the build toolchain, source tree, or dev deps — is the
       # whole point: it catches "works in the build env, breaks once installed" bugs.
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -108,7 +125,7 @@ jobs:
         shell: bash
         run: |
           set -eu
-          chmod +x dist/opengeneral
+          chmod +x dist/opengeneral dist/opengeneral-tui
           case "$RUNNER_OS" in
             Linux) target=linux-x86_64 ;;
             macOS) target=macos-arm64 ;;
@@ -116,9 +133,10 @@ jobs:
           export FAKE_REL="$RUNNER_TEMP/fake-release"
           mkdir -p "$FAKE_REL"
           cp dist/opengeneral "$FAKE_REL/opengeneral-$target"
+          cp dist/opengeneral-tui "$FAKE_REL/opengeneral-tui-$target"
           ( cd "$FAKE_REL" && { command -v sha256sum >/dev/null 2>&1 \
-              && sha256sum "opengeneral-$target" \
-              || shasum -a 256 "opengeneral-$target"; } > SHA256SUMS )
+              && sha256sum "opengeneral-$target" "opengeneral-tui-$target" \
+              || shasum -a 256 "opengeneral-$target" "opengeneral-tui-$target"; } > SHA256SUMS )
           STUB="$RUNNER_TEMP/stub"; mkdir -p "$STUB"
           {
             echo '#!/usr/bin/env bash'
@@ -145,8 +163,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path $rel | Out-Null
           Copy-Item dist\opengeneral.exe (Join-Path $rel "opengeneral-$target.exe")
           Copy-Item dist\opengeneral-svc.exe (Join-Path $rel "opengeneral-svc-$target.exe")
+          Copy-Item dist\opengeneral-tui.exe (Join-Path $rel "opengeneral-tui-$target.exe")
           $lines = @()
-          foreach ($a in @("opengeneral-$target.exe", "opengeneral-svc-$target.exe")) {
+          foreach ($a in @("opengeneral-$target.exe", "opengeneral-svc-$target.exe", "opengeneral-tui-$target.exe")) {
             $h = (Get-FileHash (Join-Path $rel $a) -Algorithm SHA256).Hash.ToLower()
             $lines += "$h  $a"
           }
@@ -156,6 +175,12 @@ jobs:
           $dir = "$env:ProgramFiles\OpenGeneral"
           Add-Content -Path $env:GITHUB_PATH -Value $dir
           Add-Content -Path $env:GITHUB_ENV -Value "OPENGENERAL_BINARY=$dir\opengeneral.exe"
+
+      # The installer placed the TUI binary alongside the main one; confirm it runs.
+      # The full-screen UI needs a TTY (not available here), so smoke just --help.
+      - name: TUI smoke (--help)
+        shell: bash
+        run: opengeneral-tui --help
 
       # Secondary, service-less path: foreground daemon (the --no-service / tech-user
       # case) + installer-correctness (checksum reject, uninstall). No OS service here,

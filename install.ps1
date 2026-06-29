@@ -30,6 +30,8 @@ $target = 'windows-x86_64'
 $asset = "opengeneral-$target.exe"
 # The SCM service host ships alongside the main binary; both install together.
 $svcAsset = "opengeneral-svc-$target.exe"
+# The connection-visualization TUI ships alongside the main binary too.
+$tuiAsset = "opengeneral-tui-$target.exe"
 
 function Test-IsAdmin {
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -54,11 +56,13 @@ function Remove-FromMachinePath {
 if ($Uninstall) {
   $bin = Join-Path $InstallDir 'opengeneral.exe'
   $svcBin = Join-Path $InstallDir 'opengeneral-svc.exe'
+  $tuiBin = Join-Path $InstallDir 'opengeneral-tui.exe'
   if (Test-Path $bin) {
     & $bin daemon uninstall
     if ($LASTEXITCODE -ne 0) { Write-Host "Note: 'daemon uninstall' reported an issue; continuing." }
     Remove-Item -Force $bin
     if (Test-Path $svcBin) { Remove-Item -Force $svcBin }
+    if (Test-Path $tuiBin) { Remove-Item -Force $tuiBin }
     Remove-FromMachinePath -Dir $InstallDir
     Write-Host "Removed $bin"
   }
@@ -101,6 +105,7 @@ try {
 
   Install-VerifiedAsset $asset 'opengeneral.exe'
   Install-VerifiedAsset $svcAsset 'opengeneral-svc.exe'
+  Install-VerifiedAsset $tuiAsset 'opengeneral-tui.exe'
   $dest = Join-Path $InstallDir 'opengeneral.exe'
   Write-Host "Installed opengeneral to $dest"
 }

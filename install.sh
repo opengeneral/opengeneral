@@ -51,6 +51,7 @@ if [ "$DO_UNINSTALL" -eq 1 ]; then
   else
     echo "No opengeneral binary at $bin — nothing to remove."
   fi
+  $SUDO rm -f "$INSTALL_DIR/opengeneral-tui"
   echo "The daemon's config and secrets were left intact."
   exit 0
 fi
@@ -83,7 +84,6 @@ case "$target" in
     exit 1 ;;
 esac
 
-asset="opengeneral-${target}"
 if [ "$VERSION" = "latest" ]; then
   base="https://github.com/$REPO/releases/latest/download"
 else
@@ -93,30 +93,36 @@ fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-echo "Downloading $asset ($VERSION) ..."
-curl -fsSL "$base/$asset" -o "$tmp/opengeneral"
+# Download, checksum-verify, and install one asset to $INSTALL_DIR/<dest>.
+verify_and_install() {
+  asset="$1"; dest="$2"
+  curl -fsSL "$base/$asset" -o "$tmp/$dest"
+  expected="$(awk -v a="$asset" '$2 == a {print $1}' "$tmp/SHA256SUMS")"
+  if [ -z "$expected" ]; then
+    echo "Checksum for $asset not found in SHA256SUMS." >&2
+    exit 1
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(sha256sum "$tmp/$dest" | awk '{print $1}')"
+  else
+    actual="$(shasum -a 256 "$tmp/$dest" | awk '{print $1}')"
+  fi
+  if [ "$actual" != "$expected" ]; then
+    echo "Checksum mismatch for $asset:" >&2
+    echo "  expected: $expected" >&2
+    echo "  actual:   $actual" >&2
+    exit 1
+  fi
+  $SUDO install -m 0755 "$tmp/$dest" "$INSTALL_DIR/$dest"
+}
+
+echo "Downloading opengeneral ($VERSION) ..."
 curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS"
-
-expected="$(awk -v a="$asset" '$2 == a {print $1}' "$tmp/SHA256SUMS")"
-if [ -z "$expected" ]; then
-  echo "Checksum for $asset not found in SHA256SUMS." >&2
-  exit 1
-fi
-if command -v sha256sum >/dev/null 2>&1; then
-  actual="$(sha256sum "$tmp/opengeneral" | awk '{print $1}')"
-else
-  actual="$(shasum -a 256 "$tmp/opengeneral" | awk '{print $1}')"
-fi
-if [ "$actual" != "$expected" ]; then
-  echo "Checksum mismatch for $asset:" >&2
-  echo "  expected: $expected" >&2
-  echo "  actual:   $actual" >&2
-  exit 1
-fi
-
 $SUDO mkdir -p "$INSTALL_DIR"
-$SUDO install -m 0755 "$tmp/opengeneral" "$INSTALL_DIR/opengeneral"
-echo "Installed opengeneral to $INSTALL_DIR/opengeneral"
+verify_and_install "opengeneral-${target}" opengeneral
+# The connection-visualization TUI ships alongside the main binary.
+verify_and_install "opengeneral-tui-${target}" opengeneral-tui
+echo "Installed opengeneral and opengeneral-tui to $INSTALL_DIR"
 
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;

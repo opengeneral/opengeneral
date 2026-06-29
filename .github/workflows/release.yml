@@ -81,6 +81,22 @@ jobs:
           # The SCM service host ships alongside the main binary (Windows only).
           Copy-Item dist/opengeneral-svc.exe "release-assets/opengeneral-svc-${{ matrix.target }}.exe"
 
+      # The connection-visualization TUI is a separate Rust binary (a pure JSON-RPC
+      # client of the daemon). GitHub runners ship a Rust toolchain.
+      - name: Build & test the TUI (Rust)
+        shell: bash
+        run: |
+          cargo test --release --manifest-path tui/Cargo.toml
+          cargo build --release --manifest-path tui/Cargo.toml
+      - name: Stage TUI (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: cp tui/target/release/opengeneral-tui "release-assets/opengeneral-tui-${{ matrix.target }}"
+      - name: Stage TUI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Copy-Item tui/target/release/opengeneral-tui.exe "release-assets/opengeneral-tui-${{ matrix.target }}.exe"
+
       - uses: actions/upload-artifact@v4
         with:
           name: opengeneral-${{ matrix.target }}

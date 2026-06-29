@@ -74,7 +74,7 @@ irm https://raw.githubusercontent.com/opengeneral/opengeneral/main/install.ps1 |
 
 `install.ps1` installs the binaries to `%ProgramFiles%\OpenGeneral` and requires Administrator.
 
-The installer downloads the matching binary (two binaries on Windows — the main one plus the service host) from the latest GitHub Release, verifies the checksum(s), and adds the install dir to PATH. Useful flags:
+The installer downloads the matching binaries from the latest GitHub Release — the main CLI/daemon, the `opengeneral-tui` console (see below), and on Windows the service host — verifies their checksums, and adds the install dir to PATH. Useful flags:
 
 - `--with-service` (`-WithService` on Windows) also registers the background daemon service.
 - `--uninstall` (`-Uninstall`) unregisters the daemon and removes the binary, leaving your config and secrets intact.
@@ -93,7 +93,13 @@ pip install -e '.[build]'   # get PyInstaller + deps
 ./packaging/build.sh        # -> dist/opengeneral  (build.ps1 on Windows -> dist\opengeneral.exe)
 ```
 
-On Linux/macOS, `make install-bin` builds and copies the binary to `~/.local/bin` (override with `INSTALL_DIR`); `make uninstall-bin` reverses it.
+The `opengeneral-tui` console is a separate Rust binary; build it with a Rust toolchain:
+
+```bash
+cargo build --release --manifest-path tui/Cargo.toml   # -> tui/target/release/opengeneral-tui
+```
+
+On Linux/macOS, `make install-bin` builds and copies both binaries to `~/.local/bin` (override with `INSTALL_DIR`); `make uninstall-bin` reverses it. `make build-tui` builds just the TUI.
 
 ### Releases
 
@@ -209,10 +215,26 @@ the `X-OpenGeneral-Agent-Id` header; the Action Plane is responsible for verifyi
 and enforcing policy. If the Action Plane is unreachable, the agent still answers
 from the model — just without tools for that turn.
 
-### 7. Run tests
+### 7. Visualize connections (TUI)
+
+`opengeneral-tui` is a terminal UI that visualizes an agent's wiring — **agent → action
+plane → live MCP tools** — and lets you chat with it in the same view. The tools an
+agent uses on a turn light up, and the Action Plane shows as reachable or not.
 
 ```bash
-pytest
+opengeneral-tui                 # the first running agent
+opengeneral-tui --agent coder   # a specific agent
+```
+
+It is a separate Rust binary and a pure client of the daemon's localhost JSON-RPC —
+it starts nothing and reads `OPENGENERAL_DAEMON_HOST`/`OPENGENERAL_DAEMON_PORT` (default
+`127.0.0.1:4777`). Type a message and press Enter; `Esc` quits.
+
+### 8. Run tests
+
+```bash
+pytest                                              # Python
+cargo test --manifest-path tui/Cargo.toml           # TUI (Rust)
 ```
 
 ## Security model
