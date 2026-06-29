@@ -23,13 +23,14 @@ New-Item -ItemType Directory -Force -Path $sbx | Out-Null
 try {
   $rel = Join-Path $sbx 'release'
   New-Item -ItemType Directory -Force -Path $rel | Out-Null
-  # Two assets ship on Windows: the main binary + the SCM service host. The built
-  # opengeneral.exe stands in for both here — this exercises the installer's
-  # download/verify/install logic, not the host's runtime behavior.
+  # Three assets ship on Windows: the main binary, the SCM service host, and the TUI.
+  # The built opengeneral.exe stands in for all three here — this exercises the
+  # installer's download/verify/install logic, not the binaries' runtime behavior.
   $asset = 'opengeneral-windows-x86_64.exe'
   $svcAsset = 'opengeneral-svc-windows-x86_64.exe'
+  $tuiAsset = 'opengeneral-tui-windows-x86_64.exe'
   $sumLines = @()
-  foreach ($a in @($asset, $svcAsset)) {
+  foreach ($a in @($asset, $svcAsset, $tuiAsset)) {
     Copy-Item $srcBin (Join-Path $rel $a)
     $hash = (Get-FileHash (Join-Path $rel $a) -Algorithm SHA256).Hash.ToLower()
     $sumLines += "$hash  $a"
@@ -45,14 +46,16 @@ try {
   $env:INSTALL_DIR = Join-Path $sbx 'bin'
   $dest = Join-Path $env:INSTALL_DIR 'opengeneral.exe'
   $svcDest = Join-Path $env:INSTALL_DIR 'opengeneral-svc.exe'
+  $tuiDest = Join-Path $env:INSTALL_DIR 'opengeneral-tui.exe'
 
   # install
   & $installPs1
   if (-not (Test-Path $dest)) { throw "FAIL: binary not installed at $dest" }
   if (-not (Test-Path $svcDest)) { throw "FAIL: service host not installed at $svcDest" }
+  if (-not (Test-Path $tuiDest)) { throw "FAIL: tui not installed at $tuiDest" }
   & $dest --help | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "FAIL: installed binary --help exited $LASTEXITCODE" }
-  Write-Host "ok: install (both binaries) + --help"
+  Write-Host "ok: install (all binaries) + --help"
 
   # a tampered checksum on either asset must be rejected and must not install
   @("deadbeef  $asset", $sumLines[1]) | Set-Content -Path (Join-Path $rel 'SHA256SUMS') -Encoding ascii

@@ -18,6 +18,7 @@ assert() { if eval "$2"; then echo "ok: $1"; pass=$((pass + 1)); else echo "FAIL
 case "$(uname -s)" in Linux) os=linux ;; Darwin) os=macos ;; *) echo "unsupported OS" >&2; exit 2 ;; esac
 case "$(uname -m)" in x86_64 | amd64) arch=x86_64 ;; arm64 | aarch64) arch=arm64 ;; *) echo "unsupported arch" >&2; exit 2 ;; esac
 asset="opengeneral-${os}-${arch}"
+tui_asset="opengeneral-tui-${os}-${arch}"
 
 # Binary to "release": the real one if provided, else a stub.
 srcbin="${OPENGENERAL_BINARY:-}"
@@ -31,10 +32,17 @@ EOF
   chmod +x "$srcbin"
 fi
 
-# Fake release dir + checksums.
+# Fake release dir + checksums. The TUI ships alongside the main binary; the same
+# stand-in binary serves for both (we test install logic, not their runtime).
 REL="$SBX/release"; mkdir -p "$REL"
 cp "$srcbin" "$REL/$asset"
-( cd "$REL" && { command -v sha256sum >/dev/null 2>&1 && sha256sum "$asset" || shasum -a 256 "$asset"; } > SHA256SUMS )
+cp "$srcbin" "$REL/$tui_asset"
+gensums() {
+  ( cd "$REL" && { command -v sha256sum >/dev/null 2>&1 \
+      && sha256sum "$asset" "$tui_asset" \
+      || shasum -a 256 "$asset" "$tui_asset"; } > SHA256SUMS )
+}
+gensums
 
 # Stub curl that serves files from the fake release dir by basename.
 STUB="$SBX/stubbin"; mkdir -p "$STUB"
@@ -57,6 +65,7 @@ export OPENGENERAL_HOME="$SBX/home"
 echo "== install =="
 sh "$INSTALL_SH"
 assert "binary installed" "[[ -x '$BIN/opengeneral' ]]"
+assert "tui installed" "[[ -x '$BIN/opengeneral-tui' ]]"
 assert "installed binary runs --help" "'$BIN/opengeneral' --help >/dev/null 2>&1"
 
 echo "== checksum mismatch is rejected =="
@@ -70,10 +79,11 @@ assert "tampered checksum -> non-zero exit" "[[ $rc -ne 0 ]]"
 assert "no binary installed on checksum failure" "[[ ! -e '$BIN/opengeneral' ]]"
 
 echo "== reinstall then uninstall =="
-( cd "$REL" && { command -v sha256sum >/dev/null 2>&1 && sha256sum "$asset" || shasum -a 256 "$asset"; } > SHA256SUMS )
+gensums
 sh "$INSTALL_SH" >/dev/null
 assert "reinstalled" "[[ -x '$BIN/opengeneral' ]]"
 sh "$INSTALL_SH" --uninstall >/dev/null 2>&1
 assert "uninstall removed the binary" "[[ ! -e '$BIN/opengeneral' ]]"
+assert "uninstall removed the tui" "[[ ! -e '$BIN/opengeneral-tui' ]]"
 
 echo "All $pass installer checks passed."
