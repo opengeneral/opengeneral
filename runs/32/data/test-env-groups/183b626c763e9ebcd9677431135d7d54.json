@@ -1,0 +1,1 @@
+{"id":"183b626c763e9ebcd9677431135d7d54","fullName":"tests.test_service_launchd#test_install_rolls_back_when_bootstrap_fails","name":"test_install_rolls_back_when_bootstrap_fails","status":"passed","testResultsByEnv":{"default":"e2f66c6b6b50f774412286db1516e872"}}

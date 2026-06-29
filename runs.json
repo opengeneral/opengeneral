@@ -1,21 +1,5 @@
 [
   {
-    "run": 22,
-    "run_id": "27506983850",
-    "date": "2026-06-14 17:54",
-    "ref": "main",
-    "commit": "e96f60f01da1ac8ba500922e7a3ec1e6351cfc53",
-    "short_commit": "e96f60f",
-    "trigger": "workflow_dispatch",
-    "release": false,
-    "report": "runs/22/",
-    "ci_url": "https://github.com/opengeneral/opengeneral/actions/runs/27506983850",
-    "passed": 211,
-    "failed": 0,
-    "skipped": 0,
-    "total": 211
-  },
-  {
     "run": 23,
     "run_id": "27509984571",
     "date": "2026-06-14 19:53",
@@ -158,5 +142,21 @@
     "failed": 3,
     "skipped": 0,
     "total": 253
+  },
+  {
+    "run": 32,
+    "run_id": "28365708850",
+    "date": "2026-06-29 10:43",
+    "ref": "main",
+    "commit": "308f5e061aff8bbc24962864ec4eb79fd062d188",
+    "short_commit": "308f5e0",
+    "trigger": "workflow_dispatch",
+    "release": false,
+    "report": "runs/32/",
+    "ci_url": "https://github.com/opengeneral/opengeneral/actions/runs/28365708850",
+    "passed": 268,
+    "failed": 0,
+    "skipped": 0,
+    "total": 268
   }
 ]

@@ -1,0 +1,1 @@
+{"id":"04bb3686291e6fe465b5906db9b4a24b","fullName":"tests.test_providers_litellm#test_parse_tool_calls_tolerates_bad_json","name":"test_parse_tool_calls_tolerates_bad_json","status":"passed","testResultsByEnv":{"default":"c078aa4a864f483f20cf7ed7f84f6635"}}
